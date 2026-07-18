@@ -1,0 +1,174 @@
+:root {
+  --die-slot-empty-color: rgba(255, 255, 255, 0.38);
+  --die-slot-filled-color: rgba(255, 255, 255, 0.24);
+  --die-slot-hover-color: yellow;
+  --die-slot-selected-color: yellow;
+  --die-slot-held-color: black;
+  --die-slot-scored-color: rgba(78, 210, 155, 0.65);
+  --die-slot-rollio-color: red;
+
+  --die-slot-background: rgba(0, 0, 0, 0.08);
+  --die-slot-hover-background: rgba(255, 255, 255, 0.07);
+  --die-slot-selected-background: rgba(244, 185, 66, 0.11);
+  --die-slot-held-background: rgba(78, 210, 155, 0.6);
+  --die-slot-scored-background: rgba(78, 210, 155, 0.1);
+  --die-slot-rollio-background: rgba(220, 38, 38, 0.14);
+
+  --die-slot-border-width: 4px;
+  --die-slot-border-radius: 10%;
+  --die-slot-gap: 16px;
+
+  --die-held-opacity: 0.5;
+  --die-slot-hover-scale: 1.2;
+}
+
+.dice-tray {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--die-slot-gap);
+}
+
+.die-slot {
+  position: relative;
+
+  display: grid;
+  place-items: center;
+
+  min-width: 0;
+  padding: 0;
+
+  aspect-ratio: 1 / 1;
+
+  border:
+    var(--die-slot-border-width)
+    dashed
+    var(--die-slot-empty-color);
+
+  border-radius: var(--die-slot-border-radius);
+
+  background: var(--die-slot-background);
+}
+
+/*
+ * Empty slot
+ */
+
+.die-slot--empty {
+  border-style: dashed;
+  border-color: var(--die-slot-empty-color);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.025),
+      rgba(0, 0, 0, 0.06)
+    );
+}
+
+/*
+ * Filled and available
+ */
+
+.die-slot--filled {
+  border-style: solid;
+  border-color: var(--die-slot-filled-color);
+}
+
+/*
+ * Selected for holding
+ */
+
+.die-slot--selected {
+  border-style: solid;
+  border-color: var(--die-slot-selected-color);
+
+  background: var(--die-slot-selected-background);
+}
+
+/*
+ * Successfully held by the server
+ */
+
+.die-slot--held {
+  border-style: solid;
+  border-color: var(--die-slot-held-color);
+
+  background: var(--die-slot-held-background);
+}
+
+.die-slot--held .die-face {
+  opacity: var(--die-held-opacity);
+}
+
+/*
+ * Scoring state
+ */
+
+.die-slot--scored {
+  border-style: solid;
+  border-color: var(--die-slot-scored-color);
+
+  background: var(--die-slot-scored-background);
+}
+
+/*
+ * Rollio state
+ */
+
+.die-slot--scored {
+  border-style: solid;
+  border-color: var(--die-slot-rollio-color);
+
+  background: var(--die-slot-rollio-background);
+}
+
+/*
+ * Button behavior
+ */
+
+button.die-slot {
+  cursor: pointer;
+  overflow: hidden;
+}
+
+button.die-slot:hover:not(:disabled) {
+  z-index: 1;
+
+  transform: scale(
+    var(--die-slot-hover-scale)
+  );
+
+  border-color: var(--die-slot-hover-color);
+  background: var(--die-slot-hover-background);
+}
+
+button.die-slot:disabled {
+  cursor: default;
+}
+
+/*
+ * Die SVG
+ */
+
+.die-face {
+  display: block;
+
+  width: 100%;
+  height: 100%;
+}
+
+/*
+ * Responsive layout
+ */
+
+@media (max-width: 800px) {
+  .dice-tray {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .dice-tray {
+    gap: 10px;
+  }
+}

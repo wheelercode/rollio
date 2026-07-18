@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Rollio</title>
+
+  <link rel="stylesheet" href="./styles/base.css">
+  <link rel="stylesheet" href="./styles/welcome.css">
+  <link rel="stylesheet" href="./styles/game.css">
+  <link rel="stylesheet" href="./styles/dice.css">
+
+</head>
+
+<body>
+  <section id="startSection" class="screen">
+    <article class="welcome-panel">
+      <div class="welcome-art">
+        <div class="welcome-art__caption">
+          <strong>Push your luck</strong>
+
+          <p>
+            Hold the scoring dice, build your turn total,
+            and know when to bank before a Rollio takes it all.
+          </p>
+        </div>
+      </div>
+
+      <div class="welcome-content">
+        <div class="brand-mark">
+          A game of risk and reward
+        </div>
+
+        <h1 class="welcome-title">
+          Roll<span>io</span>
+        </h1>
+
+        <p class="welcome-tagline">
+          Every roll is a choice. Keep building your score,
+          or bank it before your luck runs out.
+        </p>
+
+        <div class="welcome-form">
+          <label class="welcome-line" for="playerName">
+            <span>Welcome,</span>
+
+            <input
+              id="playerName"
+              class="player-name-input"
+              name="playerName"
+              type="text"
+              value="Player 1"
+              maxlength="24"
+              autocomplete="nickname"
+              spellcheck="false"
+              aria-label="Player name"
+            >
+          </label>
+
+          <p class="welcome-instruction">
+            Press Start Game when you are ready.
+          </p>
+
+          <button
+            id="startButton"
+            class="primary-button"
+            type="button"
+          >
+            Start Game
+          </button>
+        </div>
+
+        <details class="developer-settings">
+          <summary>Developer settings</summary>
+
+          <label for="baseUrl">
+            Server address
+
+            <input
+              id="baseUrl"
+              value="http://127.0.0.1:8000"
+              autocomplete="off"
+            >
+          </label>
+        </details>
+      </div>
+    </article>
+  </section>
+
+  <section id="gameSection" class="screen" hidden>
+    <div class="game-board">
+      <header class="game-board__header">
+        <div>
+          <p class="game-board__eyebrow">Current player</p>
+          <h1 id="playerNameDisplay">Player 1</h1>
+        </div>
+
+        <div class="turn-score">
+          <span>Turn score</span>
+          <strong id="turnScore">0</strong>
+        </div>
+      </header>
+
+      <main class="dice-table">
+<div id="rolledDice" class="dice-tray" aria-label="Dice tray">
+  <button
+    class="die-slot die-slot--empty"
+    type="button"
+    aria-label="Die 1"
+    disabled
+  ></button>
+
+  <button
+    class="die-slot die-slot--empty"
+    type="button"
+    aria-label="Die 2"
+    disabled
+  ></button>
+
+  <button
+    class="die-slot die-slot--empty"
+    type="button"
+    aria-label="Die 3"
+    disabled
+  ></button>
+
+  <button
+    class="die-slot die-slot--empty"
+    type="button"
+    aria-label="Die 4"
+    disabled
+  ></button>
+
+  <button
+    class="die-slot die-slot--empty"
+    type="button"
+    aria-label="Die 5"
+    disabled
+  ></button>
+
+  <button
+    class="die-slot die-slot--empty"
+    type="button"
+    aria-label="Die 6"
+    disabled
+  ></button>
+</div>
+        </div>
+
+        <p id="message" class="game-message">
+          Press Roll to begin.
+        </p>
+
+        <div class="game-actions">
+          <button
+            id="rollButton"
+            class="game-action game-action--primary"
+            type="button"
+          >
+            Roll
+          </button>
+
+          <button
+            id="holdButton"
+            class="game-action"
+            type="button"
+            disabled
+          >
+            Hold
+          </button>
+
+          <button
+            id="bankButton"
+            class="game-action game-action--bank"
+            type="button"
+            disabled
+          >
+            Bank
+          </button>
+        </div>
+      </main>
+
+      <!-- Still required by app.js, but not part of the visible design yet. -->
+      <div hidden>
+        <span id="playerScore">0</span>
+        <span id="opponentScore">0</span>
+        <span id="targetScore">0</span>
+        <span id="rollNumber">0</span>
+        <span id="scoredDice">None</span>
+        <span id="selectedDice">None</span>
+      </div>
+
+      <details class="server-response">
+        <summary>Last server response</summary>
+        <pre id="output">No request sent yet.</pre>
+      </details>
+    </div>
+  </section>
+
+  <script type="module" src="scripts/app.js"></script>
+</body>
+</html>
