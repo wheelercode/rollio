@@ -3,9 +3,10 @@
   --die-slot-filled-color: rgba(255, 255, 255, 0.24);
   --die-slot-hover-color: yellow;
   --die-slot-selected-color: yellow;
-  --die-slot-held-color: black;
+  --die-slot-held-color: rgb(61, 61, 61);
   --die-slot-scored-color: rgba(78, 210, 155, 0.65);
   --die-slot-rollio-color: red;
+  --die-slot-settled-color: rgba(255, 255, 255, 0.24);
 
   --die-slot-background: rgba(0, 0, 0, 0.08);
   --die-slot-hover-background: rgba(255, 255, 255, 0.07);
@@ -13,8 +14,9 @@
   --die-slot-held-background: rgba(78, 210, 155, 0.6);
   --die-slot-scored-background: rgba(78, 210, 155, 0.1);
   --die-slot-rollio-background: rgba(220, 38, 38, 0.14);
+  --die-slot-settled-background: rgba(0, 0, 0, 0.08);
 
-  --die-slot-border-width: 4px;
+  --die-slot-border-width: 6px;
   --die-slot-border-radius: 10%;
   --die-slot-gap: 16px;
 
@@ -24,7 +26,6 @@
 
 .dice-tray {
   position: relative;
-
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: var(--die-slot-gap);
@@ -88,6 +89,16 @@
 }
 
 /*
+ * Die has finished its rolling animation
+ */
+.die-slot--settled {
+  border-style: solid;
+  border-color: var(--die-slot-settled-color);
+
+  background: var(--die-slot-settled-background);
+}
+
+/*
  * Successfully held by the server
  */
 
@@ -122,52 +133,6 @@
   border-color: var(--die-slot-rollio-color);
 
   background: var(--die-slot-rollio-background);
-  box-shadow:
-    0 0 0 2px rgba(255, 0, 0, 0.2),
-    0 0 22px rgba(255, 0, 0, 0.42);
-}
-
-.rollio-stamp {
-  position: absolute;
-  z-index: 10;
-  inset: 50% auto auto 50%;
-
-  padding: 0.08em 0.3em;
-
-  border: 0.12em solid #ff1f1f;
-  border-radius: 0.12em;
-
-  color: #ff1f1f;
-  background: rgba(15, 0, 0, 0.2);
-
-  font-family: Impact, Haettenschweiler, "Arial Black", sans-serif;
-  font-size: clamp(3.5rem, 12vw, 8.5rem);
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  line-height: 0.95;
-  text-shadow:
-    0 3px 0 rgba(0, 0, 0, 0.5),
-    0 0 18px rgba(255, 0, 0, 0.4);
-
-  pointer-events: none;
-  transform: translate(-50%, -50%) rotate(-45deg);
-  animation: rollio-stamp-in 260ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
-}
-
-.rollio-stamp[hidden] {
-  display: none;
-}
-
-@keyframes rollio-stamp-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, -50%) rotate(-45deg) scale(1.8);
-  }
-
-  to {
-    opacity: 1;
-    transform: translate(-50%, -50%) rotate(-45deg) scale(1);
-  }
 }
 
 /*
@@ -219,4 +184,43 @@ button.die-slot:disabled {
   .dice-tray {
     gap: 10px;
   }
-} 
+}
+
+/*
+ * Special roll stamps
+ */
+
+.dice-stamp {
+  position: absolute;
+  z-index: 10;
+  top: 50%;
+  left: 50%;
+
+  padding: 0.08em 0.28em;
+
+  transform: translate(-50%, -50%) rotate(-45deg);
+
+  border: 0.12em solid currentColor;
+  border-radius: 0.12em;
+
+  background: rgba(255, 255, 255, 0.88);
+
+  font-size: clamp(2.5rem, 9vw, 7rem);
+  font-weight: 1000;
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+
+  pointer-events: none;
+  user-select: none;
+
+  filter: drop-shadow(0 0.08em 0 rgba(0, 0, 0, 0.24));
+}
+
+.dice-stamp--rollio {
+  color: #dc2626;
+}
+
+.dice-stamp--hot {
+  color: #f59e0b;
+}

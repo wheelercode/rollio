@@ -138,7 +138,10 @@ class Game:
                 "error": "The game is not playing.",
             }
 
-        if self.turn.state != "WAITING_FOR_SELECTION":
+        if self.turn.state not in (
+            "WAITING_FOR_SELECTION",
+            "READY_TO_CONTINUE",
+        ):
             return {
                 "success": False,
                 "error": (
@@ -178,6 +181,12 @@ class Game:
 
         self.turn.base_score += scoring_result["score"]
         self.turn.scored_dice.extend(sorted(scoring_dice))
+        remaining_dice = list(self.turn.rolled_dice)
+
+        for die in scoring_dice:
+            remaining_dice.remove(die)
+
+        self.turn.rolled_dice = remaining_dice
         self.turn.state = "READY_TO_CONTINUE"
 
         return {

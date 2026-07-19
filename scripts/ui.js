@@ -9,11 +9,19 @@ const DIE_FACE_URLS = Object.freeze({
   6: "assets/die-6.svg",
 });
 
-const ROLL_ANIMATION_DURATION = 3000;
-const ROLL_FACE_INTERVAL = 60;
+const ROLL_ANIMATION_DURATION = 2300;
+const ROLL_DURATION_VARIANCE = 500;
+
+const MIN_SUSPENSE_DURATION = 250;
+const MAX_SUSPENSE_DURATION = 900;
+
+const START_FACE_INTERVAL = 45;
+const MIN_END_FACE_INTERVAL = 180;
+const MAX_END_FACE_INTERVAL = 360;
 
 let elements = null;
 let dieSlots = [];
+let settledIndexes = new Set();
 
 const diceFaceCache = (() => {
   const images = new Map();
@@ -68,6 +76,7 @@ class DieSlot {
     "die-slot--held",
     "die-slot--scored",
     "die-slot--rollio",
+    "die-slot--settled",
   ];
 
   constructor(element, index, onDieSelected) {
@@ -96,6 +105,7 @@ class DieSlot {
     selected = false,
     held = false,
     rollio = false,
+    settled = false,
     disabled = false,
   }) {
     this.value = value;
@@ -105,7 +115,7 @@ class DieSlot {
       this.image.removeAttribute("src");
       this.element.disabled = true;
       this.element.setAttribute("aria-pressed", "false");
-      this.setState("empty");
+      this.setState(rollio ? "rollio" : "empty");
       return;
     }
 
@@ -115,6 +125,7 @@ class DieSlot {
     if (rollio) this.setState("rollio");
     else if (held) this.setState("held");
     else if (selected) this.setState("selected");
+    else if (settled) this.setState("settled");
     else this.setState("filled");
 
     this.element.disabled = disabled;
@@ -160,6 +171,25 @@ function renderScreens(state) {
   elements.gameSection.hidden = state.ui.screen !== SCREEN.PLAY;
 }
 
+function createStamp(className, text) {
+  const stamp = document.createElement("div");
+  stamp.className = `dice-stamp ${className}`;
+  stamp.textContent = text;
+  stamp.hidden = true;
+  stamp.setAttribute("aria-hidden", "true");
+  elements.rolledDice.appendChild(stamp);
+  return stamp;
+}
+
+function renderDiceStamps(state) {
+  const hotDiceActive =
+    state.ui.heldIndexes.size === 6 &&
+    getTurn(state.game).state === "READY_TO_CONTINUE";
+
+  elements.rollioStamp.hidden = !state.ui.rollioActive;
+  elements.hotDiceStamp.hidden = !hotDiceActive;
+}
+
 function renderScoreboard(state) {
   const game = state.game;
   const turn = getTurn(game);
@@ -185,9 +215,11 @@ function renderScoreboard(state) {
 
 function renderDiceTray(state) {
   const turnState = getTurn(state.game).state;
+
   const selectable =
     state.ui.phase === UI_PHASE.IDLE &&
-    turnState === "WAITING_FOR_SELECTION" &&
+    (turnState === "WAITING_FOR_SELECTION" ||
+      turnState === "READY_TO_CONTINUE") &&
     !state.ui.rollioActive;
 
   for (let index = 0; index < dieSlots.length; index += 1) {
@@ -198,10 +230,13 @@ function renderDiceTray(state) {
       value,
       selected: state.ui.selectedIndexes.has(index),
       held,
-      rollio: state.ui.rollioActive && Number.isInteger(value),
+      rollio: state.ui.rollioActive,
+      settled: settledIndexes.has(index),
       disabled: !selectable || held,
     });
   }
+
+  elements.rollioStamp.hidden = !state.ui.rollioActive;
 }
 
 function renderButtons(state) {
@@ -215,7 +250,8 @@ function renderButtons(state) {
 
   const canHold =
     active &&
-    turnState === "WAITING_FOR_SELECTION" &&
+    (turnState === "WAITING_FOR_SELECTION" ||
+      turnState === "READY_TO_CONTINUE") &&
     state.ui.selectionIsValid &&
     !state.ui.rollioActive;
 
@@ -268,13 +304,17 @@ export function initialize({ onStart, onRoll, onHold, onBank, onDieSelected }) {
   };
 
   for (const [name, element] of Object.entries(elements)) {
-    if (!element) throw new Error(`Required DOM element was not found: ${name}`);
+    if (!element)
+      throw new Error(`Required DOM element was not found: ${name}`);
   }
 
   dieSlots = Array.from(
     elements.rolledDice.querySelectorAll(".die-slot"),
     (element, index) => new DieSlot(element, index, onDieSelected),
   );
+
+  elements.rollioStamp = createStamp("dice-stamp--rollio", "ROLLIO!");
+  elements.hotDiceStamp = createStamp("dice-stamp--hot", "HOT DICE!");
 
   elements.startButton.addEventListener("click", onStart);
   elements.rollButton.addEventListener("click", onRoll);
@@ -296,6 +336,7 @@ export function render(state) {
   renderScreens(state);
   renderScoreboard(state);
   renderDiceTray(state);
+  renderDiceStamps(state);
   elements.message.textContent = state.ui.message;
   renderButtons(state);
   elements.output.textContent = state.ui.lastApiResponse
@@ -303,41 +344,127 @@ export function render(state) {
     : "No request sent yet.";
 }
 
-export function animateRoll(openIndexes, duration = ROLL_ANIMATION_DURATION) {
+export function animateRoll(
+  openIndexes,
+  baseDuration = ROLL_ANIMATION_DURATION,
+) {
   requireInitialized();
 
-  return new Promise((resolve) => {
-    const startTime = performance.now();
-    let lastFaceChange = 0;
-    const displayedValues = new Map();
+  for (const index of openIndexes) {
+    settledIndexes.delete(index);
+    dieSlots[index].setState("filled");
+  }
 
-    for (const index of openIndexes) {
-      const value = randomDieValue();
-      displayedValues.set(index, value);
-      dieSlots[index].showFace(value);
-    }
+  const animations = openIndexes.map((index) => {
+    const profile = createRollProfile(baseDuration);
 
-    function frame(currentTime) {
-      const elapsed = currentTime - startTime;
-
-      if (currentTime - lastFaceChange >= ROLL_FACE_INTERVAL) {
-        for (const index of openIndexes) {
-          const value = randomDieValue(displayedValues.get(index));
-          displayedValues.set(index, value);
-          dieSlots[index].showFace(value);
-        }
-
-        lastFaceChange = currentTime;
-      }
-
-      if (elapsed < duration) {
-        requestAnimationFrame(frame);
-        return;
-      }
-
-      resolve();
-    }
-
-    requestAnimationFrame(frame);
+    return animateDie(index, profile);
   });
+
+  return Promise.all(animations);
+}
+
+function createRollProfile(baseDuration) {
+  const durationOffset = randomBetween(
+    -ROLL_DURATION_VARIANCE,
+    ROLL_DURATION_VARIANCE,
+  );
+
+  const totalDuration = Math.max(1000, baseDuration + durationOffset);
+
+  const suspenseDuration = randomBetween(
+    MIN_SUSPENSE_DURATION,
+    Math.min(MAX_SUSPENSE_DURATION, totalDuration * 0.45),
+  );
+
+  return {
+    totalDuration,
+    suspenseDuration,
+
+    endFaceInterval: randomBetween(
+      MIN_END_FACE_INTERVAL,
+      MAX_END_FACE_INTERVAL,
+    ),
+
+    changeAtLastInstant: Math.random() < 0.5,
+
+    finalChangeLeadTime: randomBetween(35, 140),
+
+    easingPower: randomBetween(2.2, 4.2),
+  };
+}
+
+async function animateDie(index, profile) {
+  const slot = dieSlots[index];
+  const startTime = performance.now();
+
+  const slowdownDuration = profile.totalDuration - profile.suspenseDuration;
+
+  let previousValue = null;
+
+  while (true) {
+    const elapsed = performance.now() - startTime;
+
+    if (elapsed >= slowdownDuration) {
+      break;
+    }
+
+    const progress = Math.min(elapsed / slowdownDuration, 1);
+
+    const easedProgress = Math.pow(progress, profile.easingPower);
+
+    const interval = interpolate(
+      START_FACE_INTERVAL,
+      profile.endFaceInterval,
+      easedProgress,
+    );
+
+    const value = randomDieValue(previousValue);
+
+    previousValue = value;
+    slot.showFace(value);
+
+    const remainingSlowdownTime = slowdownDuration - elapsed;
+
+    await delay(Math.min(interval, remainingSlowdownTime));
+  }
+
+  const elapsed = performance.now() - startTime;
+  const remainingDuration = Math.max(profile.totalDuration - elapsed, 0);
+
+  if (
+    profile.changeAtLastInstant &&
+    remainingDuration > profile.finalChangeLeadTime
+  ) {
+    await delay(remainingDuration - profile.finalChangeLeadTime);
+
+    const finalValue = randomDieValue(previousValue);
+
+    slot.showFace(finalValue);
+
+    await delay(profile.finalChangeLeadTime);
+  } else {
+    await delay(remainingDuration);
+  }
+
+  settledIndexes.add(index);
+  slot.setState("settled");
+}
+
+function easeInCubic(value) {
+  return value * value * value;
+}
+
+function interpolate(start, end, amount) {
+  return start + (end - start) * amount;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
+}
+
+function randomBetween(minimum, maximum) {
+  return minimum + Math.random() * (maximum - minimum);
 }

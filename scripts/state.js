@@ -25,6 +25,7 @@ export const STATE_ACTION = Object.freeze({
   SCORE_BANKED: "SCORE_BANKED",
   REQUEST_FAILED: "REQUEST_FAILED",
   MESSAGE_SET: "MESSAGE_SET",
+  ROLLIO_CLEARED: "ROLLIO_CLEARED",
 });
 
 const DICE_COUNT = 6;
@@ -75,6 +76,10 @@ function resetTray() {
 }
 
 function getOpenTrayIndexes() {
+  if (state.ui.heldIndexes.size === DICE_COUNT) {
+    return Array.from({ length: DICE_COUNT }, (_, index) => index);
+  }
+
   const indexes = [];
 
   for (let index = 0; index < DICE_COUNT; index += 1) {
@@ -125,12 +130,12 @@ function handleGameStarted({ game }) {
 }
 
 function handleRollStarted() {
-  if (state.ui.rollioActive) {
-    resetTray();
-  }
-
   state.ui.phase = UI_PHASE.ROLLING;
   state.ui.message = "Rolling...";
+
+  if (state.ui.rollioActive || state.ui.heldIndexes.size === DICE_COUNT) {
+    resetTray();
+  }
 
   clearSelection();
 }
@@ -145,7 +150,8 @@ function handleDiceRolled({ game, rolledDice, rollio = false }) {
     placeDiceInOpenSlots(rolledDice);
   }
 
-  state.ui.phase = UI_PHASE.IDLE;
+  state.ui.phase = rollio ? UI_PHASE.SUBMITTING : UI_PHASE.IDLE;
+
   state.ui.rollioActive = rollio;
   clearSelection();
 }
@@ -194,6 +200,11 @@ function handleScoreBanked({ game }) {
   resetTray();
 }
 
+function handleRollioCleared() {
+  resetTray();
+  state.ui.phase = UI_PHASE.IDLE;
+}
+
 function handleRequestFailed({ message }) {
   state.ui.phase = UI_PHASE.IDLE;
   state.ui.message = message ?? "Request failed.";
@@ -218,6 +229,7 @@ const stateActionHandlers = Object.freeze({
   [STATE_ACTION.SCORE_BANKED]: handleScoreBanked,
   [STATE_ACTION.REQUEST_FAILED]: handleRequestFailed,
   [STATE_ACTION.MESSAGE_SET]: handleMessageSet,
+  [STATE_ACTION.ROLLIO_CLEARED]: handleRollioCleared,
 });
 
 export function dispatch(type, payload = {}) {

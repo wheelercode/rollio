@@ -20,6 +20,8 @@ const apiResponseHandlers = Object.freeze({
   ERROR: handleError,
 });
 
+const ROLLIO_DISPLAY_DURATION = 3000;
+
 function render() {
   ui.render(getState());
 }
@@ -30,16 +32,9 @@ function getTurnState() {
 
 function getReturnedRolledDice(eventData = {}) {
   const turn =
-    eventData.turn && typeof eventData.turn === "object"
-      ? eventData.turn
-      : {};
-
-  const rolledDice =
-    eventData.rolled_dice ?? turn.rolled_dice;
-
-  return Array.isArray(rolledDice)
-    ? rolledDice
-    : null;
+    eventData.turn && typeof eventData.turn === "object" ? eventData.turn : {};
+  const rolledDice = eventData.rolled_dice ?? turn.rolled_dice;
+  return Array.isArray(rolledDice) ? rolledDice : null;
 }
 
 function setMessage(message) {
@@ -77,6 +72,7 @@ async function handleDiceRolled(eventData, apiResponse) {
 
   if (eventData.rollio) {
     const previousName = eventData.previous_player?.name ?? "The player";
+
     const currentName =
       eventData.current_player?.name ??
       apiResponse.game?.current_player?.name ??
@@ -87,6 +83,15 @@ async function handleDiceRolled(eventData, apiResponse) {
         `${eventData.lost_score ?? 0} points. ` +
         `It is now ${currentName}'s turn.`,
     );
+
+    render();
+
+    await delay(ROLLIO_DISPLAY_DURATION);
+
+    dispatch(STATE_ACTION.ROLLIO_CLEARED);
+
+    setMessage(`${currentName}, press Roll to begin your turn.`);
+
     return;
   }
 
@@ -154,12 +159,10 @@ export async function roll() {
   dispatch(STATE_ACTION.ROLL_STARTED);
 
   const openIndexes = getOpenIndexes();
-
   if (openIndexes.length === 0) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: "No dice are available to roll.",
     });
-
     render();
     return;
   }
@@ -168,19 +171,14 @@ export async function roll() {
   rollAnimationPromise = ui.animateRoll(openIndexes);
 
   try {
-    await callApi("/game/roll", {
-      n_dice: openIndexes.length,
-    });
+    await callApi("/game/roll", { n_dice: openIndexes.length });
   } catch (error) {
     if (rollAnimationPromise) {
       await rollAnimationPromise;
       rollAnimationPromise = null;
     }
 
-    dispatch(STATE_ACTION.REQUEST_FAILED, {
-      message: error.message,
-    });
-
+    dispatch(STATE_ACTION.REQUEST_FAILED, { message: error.message });
     render();
   }
 }
@@ -228,7 +226,7 @@ export function toggleDieSelection(index) {
 
   if (
     state.ui.phase !== UI_PHASE.IDLE ||
-    getTurnState() !== "WAITING_FOR_SELECTION" ||
+    !["WAITING_FOR_SELECTION", "READY_TO_CONTINUE"].includes(getTurnState()) ||
     value === null ||
     value === undefined ||
     state.ui.heldIndexes.has(index) ||
