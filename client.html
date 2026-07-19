@@ -94,16 +94,23 @@
 
   <section id="gameSection" class="screen" hidden>
     <div class="game-board">
-      <header class="game-board__header">
-        <div>
-          <p class="game-board__eyebrow">Current player</p>
-          <h1 id="playerNameDisplay">Player 1</h1>
-        </div>
+      <header class="game-scoreboard">
+        <section class="player-score-card player-score-card--current">
+          <span class="player-score-card__label">Current player</span>
+          <strong id="playerNameDisplay" class="player-score-card__name">Player 1</strong>
+          <span id="playerScore" class="player-score-card__score">0</span>
+        </section>
 
-        <div class="turn-score">
+        <section class="turn-score" aria-label="Current turn score">
           <span>Turn score</span>
           <strong id="turnScore">0</strong>
-        </div>
+        </section>
+
+        <section class="player-score-card player-score-card--opponent">
+          <span class="player-score-card__label">Opponent</span>
+          <strong id="opponentNameDisplay" class="player-score-card__name">Computer</strong>
+          <span id="opponentScore" class="player-score-card__score">0</span>
+        </section>
       </header>
 
       <main class="dice-table">
@@ -187,8 +194,6 @@
 
       <!-- Still required by app.js, but not part of the visible design yet. -->
       <div hidden>
-        <span id="playerScore">0</span>
-        <span id="opponentScore">0</span>
         <span id="targetScore">0</span>
         <span id="rollNumber">0</span>
         <span id="scoredDice">None</span>

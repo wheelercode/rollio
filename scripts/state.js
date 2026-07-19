@@ -1,36 +1,246 @@
-export const UI_STATE = Object.freeze({
-  READY: "READY",
-  ROLLING: "ROLLING",
+export const SCREEN = Object.freeze({
+  WELCOME: "WELCOME",
+  PLAY: "PLAY",
+  RECAP: "RECAP",
 });
 
-export const state = {
-  initialized: false,
-  gameStarted: false,
-  activeScreen: "start",
+export const UI_PHASE = Object.freeze({
+  IDLE: "IDLE",
+  ROLLING: "ROLLING",
+  SUBMITTING: "SUBMITTING",
+});
 
-  uiState: UI_STATE.READY,
+export const STATE_ACTION = Object.freeze({
+  RESET: "RESET",
+  CLIENT_INITIALIZED: "CLIENT_INITIALIZED",
+  API_RESPONSE_RECEIVED: "API_RESPONSE_RECEIVED",
+  GAME_STARTED: "GAME_STARTED",
+  ROLL_STARTED: "ROLL_STARTED",
+  DICE_ROLLED: "DICE_ROLLED",
+  DIE_SELECTION_TOGGLED: "DIE_SELECTION_TOGGLED",
+  SELECTION_EVALUATED: "SELECTION_EVALUATED",
+  HOLD_STARTED: "HOLD_STARTED",
+  HOLD_CONFIRMED: "HOLD_CONFIRMED",
+  BANK_STARTED: "BANK_STARTED",
+  SCORE_BANKED: "SCORE_BANKED",
+  REQUEST_FAILED: "REQUEST_FAILED",
+  MESSAGE_SET: "MESSAGE_SET",
+});
 
-  players: [],
-  currentPlayer: null,
-  opponent: null,
-  targetScore: 0,
+const DICE_COUNT = 6;
 
-  turnState: null,
-  turnScore: 0,
-  rollNumber: 0,
+function createInitialState() {
+  return {
+    // The latest authoritative game snapshot from the server.
+    game: null,
 
-  rolledDice: Array(6).fill(null),
-  displayedDice: Array(6).fill(null),
-  scoredDice: [],
+    // Browser-only state used to present and interact with that snapshot.
+    ui: {
+      initialized: false,
+      screen: SCREEN.WELCOME,
+      phase: UI_PHASE.IDLE,
+      trayValues: Array(DICE_COUNT).fill(null),
+      heldIndexes: new Set(),
+      selectedIndexes: new Set(),
+      selectionIsValid: false,
+      selectedScore: 0,
+      rollioActive: false,
+      message: "",
+      lastApiResponse: null,
+    },
+  };
+}
 
-  heldIndexes: new Set(),
-  selectedIndexes: new Set(),
-  selectionIsValid: false,
-  selectedScore: 0,
+const state = createInitialState();
 
-  rollioActive: false,
-  rollAnimationPromise: null,
+function replaceState(nextState) {
+  for (const key of Object.keys(state)) {
+    delete state[key];
+  }
 
-  message: "",
-  serverResponse: null,
-};
+  Object.assign(state, nextState);
+}
+
+function clearSelection() {
+  state.ui.selectedIndexes = new Set();
+  state.ui.selectionIsValid = false;
+  state.ui.selectedScore = 0;
+}
+
+function resetTray() {
+  state.ui.trayValues = Array(DICE_COUNT).fill(null);
+  state.ui.heldIndexes = new Set();
+  state.ui.rollioActive = false;
+  clearSelection();
+}
+
+function getOpenTrayIndexes() {
+  const indexes = [];
+
+  for (let index = 0; index < DICE_COUNT; index += 1) {
+    if (!state.ui.heldIndexes.has(index)) {
+      indexes.push(index);
+    }
+  }
+
+  return indexes;
+}
+
+function placeDiceInOpenSlots(rolledDice) {
+  const openIndexes = getOpenTrayIndexes();
+
+  if (rolledDice.length !== openIndexes.length) {
+    throw new Error(
+      `Server returned ${rolledDice.length} dice, ` +
+        `but ${openIndexes.length} tray slots are available.`,
+    );
+  }
+
+  const nextTrayValues = [...state.ui.trayValues];
+
+  for (let offset = 0; offset < openIndexes.length; offset += 1) {
+    nextTrayValues[openIndexes[offset]] = rolledDice[offset];
+  }
+
+  state.ui.trayValues = nextTrayValues;
+}
+
+function handleReset() {
+  replaceState(createInitialState());
+}
+
+function handleClientInitialized() {
+  state.ui.initialized = true;
+}
+
+function handleApiResponseReceived({ apiResponse }) {
+  state.ui.lastApiResponse = apiResponse;
+}
+
+function handleGameStarted({ game }) {
+  state.game = game;
+  state.ui.screen = SCREEN.PLAY;
+  state.ui.phase = UI_PHASE.IDLE;
+  resetTray();
+}
+
+function handleRollStarted() {
+  if (state.ui.rollioActive) {
+    resetTray();
+  }
+
+  state.ui.phase = UI_PHASE.ROLLING;
+  state.ui.message = "Rolling...";
+
+  clearSelection();
+}
+
+function handleDiceRolled({ game, rolledDice, rollio = false }) {
+  state.game = game;
+
+  if (rollio && rolledDice.length === DICE_COUNT) {
+    state.ui.trayValues = [...rolledDice];
+    state.ui.heldIndexes = new Set();
+  } else {
+    placeDiceInOpenSlots(rolledDice);
+  }
+
+  state.ui.phase = UI_PHASE.IDLE;
+  state.ui.rollioActive = rollio;
+  clearSelection();
+}
+
+function handleDieSelectionToggled({ index }) {
+  const nextSelection = new Set(state.ui.selectedIndexes);
+
+  if (nextSelection.has(index)) {
+    nextSelection.delete(index);
+  } else {
+    nextSelection.add(index);
+  }
+
+  state.ui.selectedIndexes = nextSelection;
+}
+
+function handleSelectionEvaluated({ valid, score }) {
+  state.ui.selectionIsValid = Boolean(valid);
+  state.ui.selectedScore = score ?? 0;
+}
+
+function handleHoldStarted() {
+  state.ui.phase = UI_PHASE.SUBMITTING;
+  state.ui.message = "";
+}
+
+function handleHoldConfirmed({ game }) {
+  state.game = game;
+
+  for (const index of state.ui.selectedIndexes) {
+    state.ui.heldIndexes.add(index);
+  }
+
+  state.ui.phase = UI_PHASE.IDLE;
+  clearSelection();
+}
+
+function handleBankStarted() {
+  state.ui.phase = UI_PHASE.SUBMITTING;
+  state.ui.message = "";
+}
+
+function handleScoreBanked({ game }) {
+  state.game = game;
+  state.ui.phase = UI_PHASE.IDLE;
+  resetTray();
+}
+
+function handleRequestFailed({ message }) {
+  state.ui.phase = UI_PHASE.IDLE;
+  state.ui.message = message ?? "Request failed.";
+}
+
+function handleMessageSet({ message = "" }) {
+  state.ui.message = message;
+}
+
+const stateActionHandlers = Object.freeze({
+  [STATE_ACTION.RESET]: handleReset,
+  [STATE_ACTION.CLIENT_INITIALIZED]: handleClientInitialized,
+  [STATE_ACTION.API_RESPONSE_RECEIVED]: handleApiResponseReceived,
+  [STATE_ACTION.GAME_STARTED]: handleGameStarted,
+  [STATE_ACTION.ROLL_STARTED]: handleRollStarted,
+  [STATE_ACTION.DICE_ROLLED]: handleDiceRolled,
+  [STATE_ACTION.DIE_SELECTION_TOGGLED]: handleDieSelectionToggled,
+  [STATE_ACTION.SELECTION_EVALUATED]: handleSelectionEvaluated,
+  [STATE_ACTION.HOLD_STARTED]: handleHoldStarted,
+  [STATE_ACTION.HOLD_CONFIRMED]: handleHoldConfirmed,
+  [STATE_ACTION.BANK_STARTED]: handleBankStarted,
+  [STATE_ACTION.SCORE_BANKED]: handleScoreBanked,
+  [STATE_ACTION.REQUEST_FAILED]: handleRequestFailed,
+  [STATE_ACTION.MESSAGE_SET]: handleMessageSet,
+});
+
+export function dispatch(type, payload = {}) {
+  const handler = stateActionHandlers[type];
+
+  if (!handler) {
+    throw new Error(`Unknown state action: ${type}`);
+  }
+
+  handler(payload);
+}
+
+export function getState() {
+  return state;
+}
+
+export function getOpenIndexes() {
+  return getOpenTrayIndexes();
+}
+
+export function getSelectedDice() {
+  return [...state.ui.selectedIndexes]
+    .sort((left, right) => left - right)
+    .map((index) => state.ui.trayValues[index])
+    .filter((value) => value !== null && value !== undefined);
+}

@@ -23,6 +23,8 @@
 }
 
 .dice-tray {
+  position: relative;
+
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: var(--die-slot-gap);
@@ -115,11 +117,57 @@
  * Rollio state
  */
 
-.die-slot--scored {
+.die-slot--rollio {
   border-style: solid;
   border-color: var(--die-slot-rollio-color);
 
   background: var(--die-slot-rollio-background);
+  box-shadow:
+    0 0 0 2px rgba(255, 0, 0, 0.2),
+    0 0 22px rgba(255, 0, 0, 0.42);
+}
+
+.rollio-stamp {
+  position: absolute;
+  z-index: 10;
+  inset: 50% auto auto 50%;
+
+  padding: 0.08em 0.3em;
+
+  border: 0.12em solid #ff1f1f;
+  border-radius: 0.12em;
+
+  color: #ff1f1f;
+  background: rgba(15, 0, 0, 0.2);
+
+  font-family: Impact, Haettenschweiler, "Arial Black", sans-serif;
+  font-size: clamp(3.5rem, 12vw, 8.5rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 0.95;
+  text-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 18px rgba(255, 0, 0, 0.4);
+
+  pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-45deg);
+  animation: rollio-stamp-in 260ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.rollio-stamp[hidden] {
+  display: none;
+}
+
+@keyframes rollio-stamp-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(1.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(-45deg) scale(1);
+  }
 }
 
 /*
@@ -171,4 +219,4 @@ button.die-slot:disabled {
   .dice-tray {
     gap: 10px;
   }
-}
+} 

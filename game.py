@@ -386,7 +386,7 @@ class Game:
 
         previous_player.score += banked_score
 
-        self._advance_turn()
+        self._next_turn()
 
         return {
             "success": True,

@@ -22,53 +22,36 @@
   width: min(100%, 980px);
 }
 
-.game-board__header {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
+.game-scoreboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   gap: 24px;
 
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
-.game-board__eyebrow {
-  margin: 0 0 6px;
+.player-score-card {
+  display: grid;
+  gap: 5px;
 
-  color: var(--text-muted);
-
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.game-board__header h1 {
-  margin: 0;
-
-  font-size: clamp(2rem, 5vw, 3.2rem);
-  line-height: 1;
-}
-
-.turn-score {
-  min-width: 160px;
-
-  padding: 16px 20px;
+  min-width: 0;
+  padding: 18px 22px;
 
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-medium);
 
   background: var(--panel);
 
-  text-align: right;
-
-  box-shadow:
-    0 14px 34px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
 }
 
-.turn-score span {
-  display: block;
-  margin-bottom: 4px;
+.player-score-card--opponent {
+  text-align: right;
+}
 
+.player-score-card__label,
+.turn-score span {
   color: var(--text-muted);
 
   font-size: 0.72rem;
@@ -77,10 +60,59 @@
   text-transform: uppercase;
 }
 
+.player-score-card__name {
+  overflow: hidden;
+
+  font-size: clamp(1.15rem, 2.5vw, 1.7rem);
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-score-card__score {
+  color: var(--accent-light);
+
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.turn-score {
+  display: grid;
+  place-items: center;
+
+  min-width: 210px;
+  padding: 18px 28px 22px;
+
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+
+  background:
+    radial-gradient(
+      circle at 50% 15%,
+      rgba(255, 255, 255, 0.16),
+      transparent 65%
+    ),
+    var(--panel);
+
+  text-align: center;
+
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.3),
+    inset 0 0 24px rgba(255, 255, 255, 0.04);
+}
+
+.turn-score span {
+  display: block;
+  margin-bottom: 5px;
+}
+
 .turn-score strong {
   color: var(--accent-light);
 
-  font-size: 2rem;
+  font-size: clamp(3.2rem, 8vw, 5.4rem);
+  font-weight: 950;
+  line-height: 0.95;
 }
 
 .dice-table {
@@ -204,15 +236,14 @@
     align-items: start;
   }
 
-  .game-board__header {
-    align-items: stretch;
-    flex-direction: column;
+  .game-scoreboard {
+    grid-template-columns: 1fr 1fr;
   }
 
   .turn-score {
+    grid-column: 1 / -1;
+    grid-row: 1;
     width: 100%;
-
-    text-align: left;
   }
 
   .game-actions {
@@ -229,7 +260,56 @@
     padding: 14px;
   }
 
+  .game-scoreboard {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .turn-score,
+  .player-score-card {
+    grid-column: 1;
+  }
+
+  .turn-score {
+    grid-row: 1;
+  }
+
+  .player-score-card--current {
+    grid-row: 2;
+  }
+
+  .player-score-card--opponent {
+    grid-row: 3;
+    text-align: left;
+  }
+
   .dice-table {
     padding: 20px;
   }
+}
+.player-score-card--current {
+  border-color: rgba(255, 224, 122, 0.9);
+
+  background:
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(255, 224, 122, 0.18),
+      transparent 58%
+    ),
+    var(--panel);
+
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.28),
+    0 0 0 2px rgba(255, 224, 122, 0.16),
+    0 0 28px rgba(255, 224, 122, 0.18);
+
+  transform: translateY(-3px);
+}
+
+.player-score-card--current .player-score-card__label {
+  color: #ffe07a;
+}
+
+.player-score-card--current .player-score-card__name {
+  color: #fff6d2;
 }
