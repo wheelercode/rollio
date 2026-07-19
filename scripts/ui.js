@@ -1,4 +1,5 @@
 import { SCREEN, UI_PHASE } from "./state.js";
+import { delay } from "./utils.js"
 
 const DIE_FACE_URLS = Object.freeze({
   1: "assets/die-1.svg",
@@ -457,12 +458,6 @@ function easeInCubic(value) {
 
 function interpolate(start, end, amount) {
   return start + (end - start) * amount;
-}
-
-function delay(milliseconds) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, milliseconds);
-  });
 }
 
 function randomBetween(minimum, maximum) {

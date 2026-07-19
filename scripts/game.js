@@ -9,6 +9,7 @@ import {
   UI_PHASE,
 } from "./state.js";
 import * as ui from "./ui.js";
+import { delay } from "./utils.js";
 
 let rollAnimationPromise = null;
 
