@@ -2,6 +2,7 @@ from collections import Counter
 from random import randint
 from uuid import uuid4
 
+
 class Game:
     def __init__(self, game_id=None):
         self.game_id = game_id or str(uuid4())
@@ -105,8 +106,8 @@ class Game:
                 "rollio": True,
                 "rolled_dice": rolled_dice,
                 "lost_score": lost_score,
-                "previous_player": previous_player.player_id,
-                "current_player": self.current_player.player_id,
+                "previous_player_id": previous_player.player_id,
+                "current_player_id": self.current_player.player_id,
             }
 
         return {
@@ -169,6 +170,7 @@ class Game:
 
         self.turn.base_score += scoring_result["score"]
         self.turn.scored_dice.extend(sorted(scoring_dice))
+
         remaining_dice = list(self.turn.rolled_dice)
 
         for die in scoring_dice:
@@ -199,6 +201,7 @@ class Game:
         dice = sorted(dice)
         n_dice = len(dice)
         counts = Counter(dice)
+
         frequency_pattern = sorted(
             counts.values(),
             reverse=True,
@@ -311,8 +314,7 @@ class Game:
 
                 if (
                     best_result is None
-                    or candidate["score"]
-                    > best_result["score"]
+                    or candidate["score"] > best_result["score"]
                 ):
                     best_result = candidate
 
@@ -394,7 +396,12 @@ class Game:
 
 
 class Player:
-    def __init__(self, player_name, player_type, player_id=None):
+    def __init__(
+        self,
+        player_name,
+        player_type,
+        player_id=None,
+    ):
         self.player_id = player_id or str(uuid4())
         self.name = player_name
         self.type = player_type
@@ -409,6 +416,7 @@ class Player:
             "turn_number": self.turn_number,
             "score": self.score,
         }
+
 
 class Turn:
     def __init__(self):
