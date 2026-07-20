@@ -234,6 +234,16 @@ export async function roll() {
     return;
   }
 
+  const gameId = state.game?.game_id;
+
+  if (!gameId) {
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: "No active game was found.",
+    });
+    render();
+    return;
+  }
+
   dispatch(STATE_ACTION.ROLL_STARTED);
 
   const openIndexes = getOpenIndexes();
@@ -254,6 +264,7 @@ export async function roll() {
 
   try {
     await callApi("/game/roll", {
+      game_id: gameId,
       n_dice: openIndexes.length,
     });
   } catch (error) {
@@ -273,6 +284,7 @@ export async function roll() {
 export async function hold() {
   const state = getState();
   const scoringDice = getSelectedDice();
+  const gameId = state.game?.game_id;
 
   if (
     state.ui.phase !== UI_PHASE.IDLE ||
@@ -282,11 +294,20 @@ export async function hold() {
     return;
   }
 
+  if (!gameId) {
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: "No active game was found.",
+    });
+    render();
+    return;
+  }
+
   dispatch(STATE_ACTION.HOLD_STARTED);
   render();
 
   try {
     await callApi("/game/hold", {
+      game_id: gameId,
       scoring_dice: scoringDice,
     });
   } catch (error) {
@@ -298,8 +319,22 @@ export async function hold() {
   }
 }
 
+// ACTION REQUIRED
+
 export async function bank() {
-  if (getState().ui.phase !== UI_PHASE.IDLE) {
+  const state = getState();
+
+  if (state.ui.phase !== UI_PHASE.IDLE) {
+    return;
+  }
+
+  const gameId = state.game?.game_id;
+
+  if (!gameId) {
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: "No active game was found.",
+    });
+    render();
     return;
   }
 
@@ -307,7 +342,9 @@ export async function bank() {
   render();
 
   try {
-    await callApi("/game/bank");
+    await callApi("/game/bank", {
+      game_id: gameId,
+    });
   } catch (error) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: error.message,

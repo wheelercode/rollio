@@ -33,26 +33,26 @@ class Game:
                 else None
             ),
         }
-def start_game(self, players):
-    if not players:
+    def start_game(self, players):
+        if not players:
+            return {
+                "success": False,
+                "error": "A game requires at least one player.",
+            }
+
+        self.players = players
+        self.current_player = self.players[0]
+        self.playing = True
+        self.turn = Turn()
+
         return {
-            "success": False,
-            "error": "A game requires at least one player.",
+            "success": True,
+            "current_player_id": self.current_player.player_id,
+            "player_count": len(self.players),
+            "instructions": (
+                f"{self.current_player.name}, you may roll at any time!"
+            ),
         }
-
-    self.players = players
-    self.current_player = self.players[0]
-    self.playing = True
-    self.turn = Turn()
-
-    return {
-        "success": True,
-        "current_player_id": self.current_player.player_id,
-        "player_count": len(self.players),
-        "instructions": (
-            f"{self.current_player.name}, you may roll at any time!"
-        ),
-    }
 
     def roll(self, n_dice):
         if not self.playing:
