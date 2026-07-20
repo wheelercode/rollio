@@ -6,11 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from game import Game, Player
-
-
-class StatusCode(str, Enum):
-    OK = "OK"
-    GAME_ERROR = "GAME_ERROR"
+from games_manager import GamesManager
 
 
 class GameEvent(str, Enum):
@@ -19,18 +15,16 @@ class GameEvent(str, Enum):
     SCORE_BANKED = "SCORE_BANKED"
     ERROR = "ERROR"
 
-class GameRequest(BaseModel):
-    game_id: str
 
 class ApiResponse(BaseModel):
     protocol_version: int = 1
-    status_code: StatusCode
     message: str = ""
     game_event: GameEvent
     event_data: dict[str, Any] = Field(default_factory=dict)
-    game: dict[str, Any] = Field(default_factory=dict)
-    error_data: dict[str, Any] = Field(default_factory=dict)
+    game_state: dict[str, Any] = Field(default_factory=dict)
 
+class GameRequest(BaseModel):
+    game_id: str
 
 class PlayerRequest(BaseModel):
     name: str
@@ -64,59 +58,87 @@ app.add_middleware(
 )
 
 
-games: dict[str, Game] = {}
-
-
-def get_game(game_id: str) -> Game | None:
-    return games.get(game_id)
+games_manager = GamesManager()
 
 
 def game_not_found_response(game_id: str) -> ApiResponse:
-    message = f"Game not found: {game_id}"
-
     return ApiResponse(
-        status_code=StatusCode.GAME_ERROR,
-        message=message,
+        message=f"Game not found: {game_id}",
         game_event=GameEvent.ERROR,
-        error_data={
-            "game_id": game_id,
-            "error": message,
-        },
     )
+
+def normalize_event_data(
+        game_event: GameEvent,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+    if game_event == GameEvent.GAME_STARTED:
+        return {}
+
+    if game_event == GameEvent.DICE_ROLLED:
+        event_data = {
+            "rollio": bool(result.get("rollio")),
+        }
+
+        if event_data["rollio"]:
+            event_data.update(
+                {
+                    "rolled_dice": result.get(
+                        "rolled_dice",
+                        [],
+                    ),
+                    "lost_score": result.get(
+                        "lost_score",
+                        0,
+                    ),
+                    "previous_player_id": result.get(
+                        "previous_player_id",
+                    ),
+                }
+            )
+
+        return event_data
+
+    if game_event == GameEvent.SCORE_BANKED:
+        return {
+            "previous_player_id": result.get(
+                "previous_player_id",
+            ),
+            "banked_score": result.get(
+                "banked_score",
+                0,
+            ),
+        }
+
+    return {}
 
 
 def game_response(
     game: Game,
     game_event: GameEvent,
-    event_data: dict[str, Any],
+    result: dict[str, Any],
 ) -> ApiResponse:
-    if event_data.get("success") is False:
-        message = event_data.get(
-            "error",
-            "The game rejected the request.",
-        )
-
+    if result.get("success") is False:
         return ApiResponse(
-            status_code=StatusCode.GAME_ERROR,
-            message=message,
+            message=result.get(
+                "error",
+                "The game rejected the request.",
+            ),
             game_event=GameEvent.ERROR,
-            game=game.getJSON(),
-            error_data=event_data,
+            game_state=game.getJSON(),
         )
-
-    normalized_event_data = dict(event_data)
-    normalized_event_data.pop("success", None)
 
     return ApiResponse(
-        status_code=StatusCode.OK,
         game_event=game_event,
-        event_data=normalized_event_data,
-        game=game.getJSON(),
+        event_data=normalize_event_data(
+            game_event,
+            result,
+        ),
+        game_state=game.getJSON(),
     )
 
 @app.post("/game/start", response_model=ApiResponse)
 def start_game(request: StartRequest):
-    game = Game()
+    game = games_manager.create_game()
 
     players = [
         Player(player.name, player.type)
@@ -124,8 +146,6 @@ def start_game(request: StartRequest):
     ]
 
     event_data = game.start_game(players)
-
-    games[game.game_id] = game
 
     return game_response(
         game,
@@ -135,8 +155,7 @@ def start_game(request: StartRequest):
 
 @app.post("/game/roll", response_model=ApiResponse)
 def roll(request: RollRequest):
-    game = get_game(request.game_id)
-
+    game = games_manager.get_game(request.game_id)
     if game is None:
         return game_not_found_response(request.game_id)
 
@@ -148,7 +167,7 @@ def roll(request: RollRequest):
 
 @app.post("/game/bank", response_model=ApiResponse)
 def bank(request: BankRequest):
-    game = get_game(request.game_id)
+    game = games_manager.get_game(request.game_id)
 
     if game is None:
         return game_not_found_response(request.game_id)

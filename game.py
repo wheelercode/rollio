@@ -7,7 +7,7 @@ from uuid import uuid4
 
 class Game:
     def __init__(self, game_id=None):
-        self.game_id = game_id or str(uuid4())
+        self.game_id = game_id
         self.players = []
         self.current_player = None
         self.playing = False
