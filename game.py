@@ -16,6 +16,7 @@ class Game:
         return {
             "game_id": self.game_id,
             "playing": self.playing,
+            "player_count": len(self.players),
             "players": [
                 player.getJSON()
                 for player in self.players
@@ -32,20 +33,26 @@ class Game:
                 else None
             ),
         }
-
-    def start_game(self, players):
-        self.players = players
-        self.current_player = self.players[0]
-        self.playing = True
-        self.turn = Turn()
-
+def start_game(self, players):
+    if not players:
         return {
-            "success": True,
-            "current_player_id": self.current_player.player_id,
-            "instructions": (
-                f"{self.current_player.name}, you may roll at any time!"
-            ),
+            "success": False,
+            "error": "A game requires at least one player.",
         }
+
+    self.players = players
+    self.current_player = self.players[0]
+    self.playing = True
+    self.turn = Turn()
+
+    return {
+        "success": True,
+        "current_player_id": self.current_player.player_id,
+        "player_count": len(self.players),
+        "instructions": (
+            f"{self.current_player.name}, you may roll at any time!"
+        ),
+    }
 
     def roll(self, n_dice):
         if not self.playing:

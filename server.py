@@ -37,14 +37,18 @@ class PlayerRequest(BaseModel):
 
 
 class StartRequest(BaseModel):
-    players: list[PlayerRequest]
+    players: list[PlayerRequest] = Field(min_length=1)
 
 
-class RollRequest(BaseModel):
+class GameRequest(BaseModel):
+    game_id: str
+
+
+class RollRequest(GameRequest):
     n_dice: int
 
 
-class HoldRequest(BaseModel):
+class HoldRequest(GameRequest):
     scoring_dice: list[int]
 
 
@@ -52,18 +56,49 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+):5500",
+    allow_origin_regex=(
+        r"http://"
+        r"(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)"
+        r":5500"
+    ),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-game = Game()
+
+games: dict[str, Game] = {}
 
 
-def game_response(game_event: GameEvent, event_data: dict[str, Any]) -> ApiResponse:
+def get_game(game_id: str) -> Game | None:
+    return games.get(game_id)
+
+
+def game_not_found_response(game_id: str) -> ApiResponse:
+    message = f"Game not found: {game_id}"
+
+    return ApiResponse(
+        status_code=StatusCode.GAME_ERROR,
+        message=message,
+        game_event=GameEvent.ERROR,
+        error_data={
+            "game_id": game_id,
+            "error": message,
+        },
+    )
+
+
+def game_response(
+    game: Game,
+    game_event: GameEvent,
+    event_data: dict[str, Any],
+) -> ApiResponse:
     if event_data.get("success") is False:
-        message = event_data.get("error", "The game rejected the request.")
+        message = event_data.get(
+            "error",
+            "The game rejected the request.",
+        )
+
         return ApiResponse(
             status_code=StatusCode.GAME_ERROR,
             message=message,
@@ -72,33 +107,74 @@ def game_response(game_event: GameEvent, event_data: dict[str, Any]) -> ApiRespo
             error_data=event_data,
         )
 
-    event_data = dict(event_data)
-    event_data.pop("success", None)
+    normalized_event_data = dict(event_data)
+    normalized_event_data.pop("success", None)
 
     return ApiResponse(
         status_code=StatusCode.OK,
         game_event=game_event,
-        event_data=event_data,
+        event_data=normalized_event_data,
         game=game.getJSON(),
     )
 
 
 @app.post("/game/start", response_model=ApiResponse)
 def start_game(request: StartRequest):
-    players = [Player(player.name, player.type) for player in request.players]
-    return game_response(GameEvent.GAME_STARTED, game.start_game(players))
+    game = Game()
+
+    players = [
+        Player(player.name, player.type)
+        for player in request.players
+    ]
+
+    event_data = game.start_game(players)
+
+    games[game.game_id] = game
+
+    return game_response(
+        game,
+        GameEvent.GAME_STARTED,
+        event_data,
+    )
 
 
 @app.post("/game/roll", response_model=ApiResponse)
 def roll(request: RollRequest):
-    return game_response(GameEvent.DICE_ROLLED, game.roll(request.n_dice))
+    game = get_game(request.game_id)
+
+    if game is None:
+        return game_not_found_response(request.game_id)
+
+    return game_response(
+        game,
+        GameEvent.DICE_ROLLED,
+        game.roll(request.n_dice),
+    )
 
 
 @app.post("/game/hold", response_model=ApiResponse)
 def hold(request: HoldRequest):
-    return game_response(GameEvent.DICE_HELD, game.hold(request.scoring_dice))
+    game = get_game(request.game_id)
+
+    if game is None:
+        return game_not_found_response(request.game_id)
+
+    return game_response(
+        game,
+        GameEvent.DICE_HELD,
+        game.hold(request.scoring_dice),
+    )
 
 
 @app.post("/game/bank", response_model=ApiResponse)
-def bank():
-    return game_response(GameEvent.SCORE_BANKED, game.bank())
+def bank(request: GameRequest):
+    game = get_game(request.game_id)
+
+    if game is None:
+        return game_not_found_response(request.game_id)
+
+    return game_response(
+        game,
+        GameEvent.SCORE_BANKED,
+        game.bank(),
+    )
