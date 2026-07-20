@@ -1,5 +1,5 @@
 import { SCREEN, UI_PHASE } from "./state.js";
-import { delay } from "./utils.js"
+import { delay, getCurrentPlayer } from "./utils.js";
 
 const DIE_FACE_URLS = Object.freeze({
   1: "assets/die-1.svg",
@@ -146,18 +146,18 @@ function requireInitialized() {
   }
 }
 
-function findOpponent(players, currentPlayer) {
-  if (!Array.isArray(players) || !currentPlayer) return null;
-  return players.find((player) => player.name !== currentPlayer.name) ?? null;
+function findOpponent(game, currentPlayerId) {
+  if (!Array.isArray(game?.players)) {
+    return null;
+  }
+
+  return (
+    game.players.find((player) => player.player_id !== currentPlayerId) ?? null
+  );
 }
 
 function getTurn(game) {
   return game?.turn && typeof game.turn === "object" ? game.turn : {};
-}
-
-function getCurrentPlayer(game) {
-  const turn = getTurn(game);
-  return game?.current_player ?? turn.player ?? null;
 }
 
 function getSelectedValues(state) {
@@ -195,7 +195,7 @@ function renderScoreboard(state) {
   const game = state.game;
   const turn = getTurn(game);
   const currentPlayer = getCurrentPlayer(game);
-  const opponent = game?.opponent ?? findOpponent(game?.players, currentPlayer);
+  const opponent = findOpponent(game, game?.current_player_id);
 
   elements.playerNameDisplay.textContent = currentPlayer?.name ?? "Player 1";
   elements.playerScore.textContent = currentPlayer?.score ?? 0;

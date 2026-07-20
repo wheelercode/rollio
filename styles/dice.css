@@ -6,7 +6,7 @@
   --die-slot-held-color: rgb(61, 61, 61);
   --die-slot-scored-color: rgba(157, 157, 157, 0.65);
   --die-slot-rollio-color: red;
-  --die-slot-settled-color: rgb(255, 255, 255);
+  --die-slot-settled-color: rgb(5, 58, 0);
 
   --die-slot-background: rgba(0, 0, 0, 0.08);
   --die-slot-hover-background: rgba(255, 255, 255, 0.07);
@@ -73,7 +73,7 @@
  */
 
 .die-slot--filled {
-  border-style: solid;
+  border-style: dashed;
   border-color: var(--die-slot-filled-color);
 }
 

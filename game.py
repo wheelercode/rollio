@@ -1,9 +1,10 @@
 from collections import Counter
 from random import randint
-
+from uuid import uuid4
 
 class Game:
-    def __init__(self):
+    def __init__(self, game_id=None):
+        self.game_id = game_id or str(uuid4())
         self.players = []
         self.current_player = None
         self.playing = False
@@ -12,10 +13,14 @@ class Game:
 
     def getJSON(self):
         return {
+            "game_id": self.game_id,
             "playing": self.playing,
-            "players": [player.getJSON() for player in self.players],
-            "current_player": (
-                self.current_player.getJSON()
+            "players": [
+                player.getJSON()
+                for player in self.players
+            ],
+            "current_player_id": (
+                self.current_player.player_id
                 if self.current_player is not None
                 else None
             ),
@@ -31,17 +36,14 @@ class Game:
         self.players = players
         self.current_player = self.players[0]
         self.playing = True
-        self.turn = Turn(self.current_player)
+        self.turn = Turn()
 
         return {
-            "playing": self.playing,
-            "players": [player.getJSON() for player in self.players],
-            "current_player": self.current_player.getJSON(),
+            "success": True,
+            "current_player_id": self.current_player.player_id,
             "instructions": (
                 f"{self.current_player.name}, you may roll at any time!"
             ),
-            "target_score": self.target_score,
-            "turn": self.turn.getJSON(),
         }
 
     def roll(self, n_dice):
@@ -103,22 +105,8 @@ class Game:
                 "rollio": True,
                 "rolled_dice": rolled_dice,
                 "lost_score": lost_score,
-                "previous_player": {
-                    "name": previous_player.name,
-                    "score": previous_player.score,
-                },
-                "current_player": {
-                    "name": self.current_player.name,
-                    "type": self.current_player.type,
-                    "score": self.current_player.score,
-                },
-                "turn": {
-                    "roll_number": self.turn.roll_number,
-                    "scored_dice": self.turn.scored_dice,
-                    "rolled_dice": self.turn.rolled_dice,
-                    "base_score": self.turn.base_score,
-                    "state": self.turn.state,
-                },
+                "previous_player": previous_player.player_id,
+                "current_player": self.current_player.player_id,
             }
 
         return {
@@ -369,7 +357,7 @@ class Game:
 
         self.current_player.turn_number += 1
         self.current_player = self.players[next_index]
-        self.turn = Turn(self.current_player)
+        self.turn = Turn()
 
     def bank(self):
         if not self.playing:
@@ -400,14 +388,14 @@ class Game:
         return {
             "success": True,
             "banked_score": banked_score,
-            "previous_player": previous_player.getJSON(),
-            "current_player": self.current_player.getJSON(),
-            "turn": self.turn.getJSON(),
+            "previous_player_id": previous_player.player_id,
+            "current_player_id": self.current_player.player_id,
         }
 
 
 class Player:
-    def __init__(self, player_name, player_type):
+    def __init__(self, player_name, player_type, player_id=None):
+        self.player_id = player_id or str(uuid4())
         self.name = player_name
         self.type = player_type
         self.turn_number = 0
@@ -415,25 +403,24 @@ class Player:
 
     def getJSON(self):
         return {
+            "player_id": self.player_id,
             "name": self.name,
             "type": self.type,
             "turn_number": self.turn_number,
             "score": self.score,
         }
 
-
 class Turn:
-    def __init__(self, player):
+    def __init__(self):
         self.roll_number = 0
-        self.player = player
         self.scored_dice = []
         self.rolled_dice = []
         self.base_score = 0
         self.state = "READY_TO_ROLL"
+
     def getJSON(self):
         return {
             "roll_number": self.roll_number,
-            "player": self.player.getJSON(),
             "scored_dice": list(self.scored_dice),
             "rolled_dice": list(self.rolled_dice),
             "base_score": self.base_score,

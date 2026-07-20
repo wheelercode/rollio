@@ -1,4 +1,4 @@
-import { callApi, initializeApi } from "./api.js";
+import { callApi, initializeApi } from "./http.js";
 import { scoreSelection } from "./scoring.js";
 import {
   dispatch,
@@ -9,7 +9,7 @@ import {
   UI_PHASE,
 } from "./state.js";
 import * as ui from "./ui.js";
-import { delay } from "./utils.js";
+import { delay, getPlayerById } from "./utils.js";
 
 let rollAnimationPromise = null;
 
@@ -33,9 +33,16 @@ function getTurnState() {
 
 function getReturnedRolledDice(eventData = {}) {
   const turn =
-    eventData.turn && typeof eventData.turn === "object" ? eventData.turn : {};
-  const rolledDice = eventData.rolled_dice ?? turn.rolled_dice;
-  return Array.isArray(rolledDice) ? rolledDice : null;
+    eventData.turn && typeof eventData.turn === "object"
+      ? eventData.turn
+      : {};
+
+  const rolledDice =
+    eventData.rolled_dice ?? turn.rolled_dice;
+
+  return Array.isArray(rolledDice)
+    ? rolledDice
+    : null;
 }
 
 function setMessage(message) {
@@ -43,12 +50,17 @@ function setMessage(message) {
 }
 
 function handleGameStarted(_eventData, apiResponse) {
-  dispatch(STATE_ACTION.GAME_STARTED, { game: apiResponse.game });
+  dispatch(STATE_ACTION.GAME_STARTED, {
+    game: apiResponse.game,
+  });
+
+  const currentPlayer = getPlayerById(
+    apiResponse.game,
+    apiResponse.game?.current_player_id,
+  );
 
   const playerName =
-    apiResponse.game?.current_player?.name ??
-    apiResponse.game?.turn?.player?.name ??
-    "Player 1";
+    currentPlayer?.name ?? "Player 1";
 
   setMessage(`${playerName}, press Roll to begin.`);
 }
@@ -59,10 +71,13 @@ async function handleDiceRolled(eventData, apiResponse) {
     rollAnimationPromise = null;
   }
 
-  const rolledDice = getReturnedRolledDice(eventData);
+  const rolledDice =
+    getReturnedRolledDice(eventData);
 
   if (!rolledDice) {
-    throw new Error("The server did not return rolled dice.");
+    throw new Error(
+      "The server did not return rolled dice.",
+    );
   }
 
   dispatch(STATE_ACTION.DICE_ROLLED, {
@@ -72,12 +87,22 @@ async function handleDiceRolled(eventData, apiResponse) {
   });
 
   if (eventData.rollio) {
-    const previousName = eventData.previous_player?.name ?? "The player";
+    const previousPlayer = getPlayerById(
+      apiResponse.game,
+      eventData.previous_player_id,
+    );
+
+    const currentPlayer = getPlayerById(
+      apiResponse.game,
+      eventData.current_player_id ??
+        apiResponse.game?.current_player_id,
+    );
+
+    const previousName =
+      previousPlayer?.name ?? "The player";
 
     const currentName =
-      eventData.current_player?.name ??
-      apiResponse.game?.current_player?.name ??
-      "the next player";
+      currentPlayer?.name ?? "the next player";
 
     setMessage(
       `${previousName} rolled a Rollio and lost ` +
@@ -91,45 +116,85 @@ async function handleDiceRolled(eventData, apiResponse) {
 
     dispatch(STATE_ACTION.ROLLIO_CLEARED);
 
-    setMessage(`${currentName}, press Roll to begin your turn.`);
+    setMessage(
+      `${currentName}, press Roll to begin your turn.`,
+    );
 
     return;
   }
 
-  setMessage("Select the scoring dice you want to hold.");
+  setMessage(
+    "Select the scoring dice you want to hold.",
+  );
 }
 
 function handleDiceHeld(eventData, apiResponse) {
-  dispatch(STATE_ACTION.HOLD_CONFIRMED, { game: apiResponse.game });
+  dispatch(STATE_ACTION.HOLD_CONFIRMED, {
+    game: apiResponse.game,
+  });
+
   setMessage(`Held for +${eventData.score}.`);
 }
 
-function handleScoreBanked(eventData, apiResponse) {
-  dispatch(STATE_ACTION.SCORE_BANKED, { game: apiResponse.game });
+function handleScoreBanked(
+  eventData,
+  apiResponse,
+) {
+  dispatch(STATE_ACTION.SCORE_BANKED, {
+    game: apiResponse.game,
+  });
 
-  const previousName = eventData.previous_player?.name ?? "The player";
-  const currentName = eventData.current_player?.name ?? "the next player";
+  const previousPlayer = getPlayerById(
+    apiResponse.game,
+    eventData.previous_player_id,
+  );
+
+  const currentPlayer = getPlayerById(
+    apiResponse.game,
+    eventData.current_player_id ??
+      apiResponse.game?.current_player_id,
+  );
+
+  const previousName =
+    previousPlayer?.name ?? "The player";
+
+  const currentName =
+    currentPlayer?.name ?? "the next player";
 
   setMessage(
-    `${previousName} banked ${eventData.banked_score} points. ` +
+    `${previousName} banked ` +
+      `${eventData.banked_score} points. ` +
       `It is now ${currentName}'s turn.`,
   );
 }
 
 function handleError(_eventData, apiResponse) {
-  throw new Error(apiResponse.message || "The server rejected the request.");
+  throw new Error(
+    apiResponse.message ||
+      "The server rejected the request.",
+  );
 }
 
 async function handleApiResponse(apiResponse) {
-  dispatch(STATE_ACTION.API_RESPONSE_RECEIVED, { apiResponse });
+  dispatch(
+    STATE_ACTION.API_RESPONSE_RECEIVED,
+    { apiResponse },
+  );
 
-  const handler = apiResponseHandlers[apiResponse.game_event];
+  const handler =
+    apiResponseHandlers[apiResponse.game_event];
 
   if (!handler) {
-    throw new Error(`Unhandled game event: ${apiResponse.game_event}`);
+    throw new Error(
+      `Unhandled game event: ${apiResponse.game_event}`,
+    );
   }
 
-  await handler(apiResponse.event_data, apiResponse);
+  await handler(
+    apiResponse.event_data,
+    apiResponse,
+  );
+
   render();
 }
 
@@ -138,16 +203,26 @@ export async function startGame() {
   render();
 
   try {
-    const playerName = ui.readPlayerName().trim() || "Player 1";
+    const playerName =
+      ui.readPlayerName().trim() || "Player 1";
 
     await callApi("/game/start", {
       players: [
-        { name: playerName, type: "human" },
-        { name: "Computer", type: "ai" },
+        {
+          name: playerName,
+          type: "human",
+        },
+        {
+          name: "Computer",
+          type: "ai",
+        },
       ],
     });
   } catch (error) {
-    dispatch(STATE_ACTION.REQUEST_FAILED, { message: error.message });
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: error.message,
+    });
+
     render();
   }
 }
@@ -155,31 +230,42 @@ export async function startGame() {
 export async function roll() {
   const state = getState();
 
-  if (state.ui.phase !== UI_PHASE.IDLE) return;
+  if (state.ui.phase !== UI_PHASE.IDLE) {
+    return;
+  }
 
   dispatch(STATE_ACTION.ROLL_STARTED);
 
   const openIndexes = getOpenIndexes();
+
   if (openIndexes.length === 0) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: "No dice are available to roll.",
     });
+
     render();
     return;
   }
 
   render();
-  rollAnimationPromise = ui.animateRoll(openIndexes);
+
+  rollAnimationPromise =
+    ui.animateRoll(openIndexes);
 
   try {
-    await callApi("/game/roll", { n_dice: openIndexes.length });
+    await callApi("/game/roll", {
+      n_dice: openIndexes.length,
+    });
   } catch (error) {
     if (rollAnimationPromise) {
       await rollAnimationPromise;
       rollAnimationPromise = null;
     }
 
-    dispatch(STATE_ACTION.REQUEST_FAILED, { message: error.message });
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: error.message,
+    });
+
     render();
   }
 }
@@ -200,15 +286,22 @@ export async function hold() {
   render();
 
   try {
-    await callApi("/game/hold", { scoring_dice: scoringDice });
+    await callApi("/game/hold", {
+      scoring_dice: scoringDice,
+    });
   } catch (error) {
-    dispatch(STATE_ACTION.REQUEST_FAILED, { message: error.message });
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: error.message,
+    });
+
     render();
   }
 }
 
 export async function bank() {
-  if (getState().ui.phase !== UI_PHASE.IDLE) return;
+  if (getState().ui.phase !== UI_PHASE.IDLE) {
+    return;
+  }
 
   dispatch(STATE_ACTION.BANK_STARTED);
   render();
@@ -216,7 +309,10 @@ export async function bank() {
   try {
     await callApi("/game/bank");
   } catch (error) {
-    dispatch(STATE_ACTION.REQUEST_FAILED, { message: error.message });
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: error.message,
+    });
+
     render();
   }
 }
@@ -227,7 +323,10 @@ export function toggleDieSelection(index) {
 
   if (
     state.ui.phase !== UI_PHASE.IDLE ||
-    !["WAITING_FOR_SELECTION", "READY_TO_CONTINUE"].includes(getTurnState()) ||
+    ![
+      "WAITING_FOR_SELECTION",
+      "READY_TO_CONTINUE",
+    ].includes(getTurnState()) ||
     value === null ||
     value === undefined ||
     state.ui.heldIndexes.has(index) ||
@@ -236,20 +335,37 @@ export function toggleDieSelection(index) {
     return;
   }
 
-  dispatch(STATE_ACTION.DIE_SELECTION_TOGGLED, { index });
+  dispatch(
+    STATE_ACTION.DIE_SELECTION_TOGGLED,
+    { index },
+  );
 
   const selectedDice = getSelectedDice();
   const result = scoreSelection(selectedDice);
-  const valid = selectedDice.length > 0 && result.valid;
 
-  dispatch(STATE_ACTION.SELECTION_EVALUATED, {
-    valid,
-    score: result.score,
-  });
+  const valid =
+    selectedDice.length > 0 &&
+    result.valid;
 
-  if (selectedDice.length === 0) setMessage("");
-  else if (valid) setMessage(`Valid selection: +${result.score}`);
-  else setMessage("Every selected die must be part of a scoring group.");
+  dispatch(
+    STATE_ACTION.SELECTION_EVALUATED,
+    {
+      valid,
+      score: result.score,
+    },
+  );
+
+  if (selectedDice.length === 0) {
+    setMessage("");
+  } else if (valid) {
+    setMessage(
+      `Valid selection: +${result.score}`,
+    );
+  } else {
+    setMessage(
+      "Every selected die must be part of a scoring group.",
+    );
+  }
 
   render();
 }
@@ -266,14 +382,19 @@ export async function initialize() {
   });
 
   initializeApi(handleApiResponse);
+
   render();
 
   try {
     await ui.preloadAssets();
-    dispatch(STATE_ACTION.CLIENT_INITIALIZED);
+    dispatch(
+      STATE_ACTION.CLIENT_INITIALIZED,
+    );
   } catch (error) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
-      message: `Could not load dice artwork: ${error.message}`,
+      message:
+        `Could not load dice artwork: ` +
+        error.message,
     });
   }
 
