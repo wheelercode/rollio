@@ -16,10 +16,11 @@ class StatusCode(str, Enum):
 class GameEvent(str, Enum):
     GAME_STARTED = "GAME_STARTED"
     DICE_ROLLED = "DICE_ROLLED"
-    DICE_HELD = "DICE_HELD"
     SCORE_BANKED = "SCORE_BANKED"
     ERROR = "ERROR"
 
+class GameRequest(BaseModel):
+    game_id: str
 
 class ApiResponse(BaseModel):
     protocol_version: int = 1
@@ -40,16 +41,12 @@ class StartRequest(BaseModel):
     players: list[PlayerRequest] = Field(min_length=1)
 
 
-class GameRequest(BaseModel):
-    game_id: str
+class BankRequest(GameRequest):
+    scoring_dice: list[int]
 
 
 class RollRequest(GameRequest):
-    n_dice: int
-
-
-class HoldRequest(GameRequest):
-    scoring_dice: list[int]
+    scoring_dice: list[int] = Field(default_factory=list)
 
 
 app = FastAPI()
@@ -117,7 +114,6 @@ def game_response(
         game=game.getJSON(),
     )
 
-
 @app.post("/game/start", response_model=ApiResponse)
 def start_game(request: StartRequest):
     game = Game()
@@ -137,7 +133,6 @@ def start_game(request: StartRequest):
         event_data,
     )
 
-
 @app.post("/game/roll", response_model=ApiResponse)
 def roll(request: RollRequest):
     game = get_game(request.game_id)
@@ -148,26 +143,11 @@ def roll(request: RollRequest):
     return game_response(
         game,
         GameEvent.DICE_ROLLED,
-        game.roll(request.n_dice),
+        game.roll(request.scoring_dice),
     )
-
-
-@app.post("/game/hold", response_model=ApiResponse)
-def hold(request: HoldRequest):
-    game = get_game(request.game_id)
-
-    if game is None:
-        return game_not_found_response(request.game_id)
-
-    return game_response(
-        game,
-        GameEvent.DICE_HELD,
-        game.hold(request.scoring_dice),
-    )
-
 
 @app.post("/game/bank", response_model=ApiResponse)
-def bank(request: GameRequest):
+def bank(request: BankRequest):
     game = get_game(request.game_id)
 
     if game is None:
@@ -176,5 +156,5 @@ def bank(request: GameRequest):
     return game_response(
         game,
         GameEvent.SCORE_BANKED,
-        game.bank(),
+        game.bank(request.scoring_dice),
     )

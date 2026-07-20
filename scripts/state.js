@@ -1,3 +1,5 @@
+// ACTION REQUIRED
+
 export const SCREEN = Object.freeze({
   WELCOME: "WELCOME",
   PLAY: "PLAY",
@@ -19,8 +21,6 @@ export const STATE_ACTION = Object.freeze({
   DICE_ROLLED: "DICE_ROLLED",
   DIE_SELECTION_TOGGLED: "DIE_SELECTION_TOGGLED",
   SELECTION_EVALUATED: "SELECTION_EVALUATED",
-  HOLD_STARTED: "HOLD_STARTED",
-  HOLD_CONFIRMED: "HOLD_CONFIRMED",
   BANK_STARTED: "BANK_STARTED",
   SCORE_BANKED: "SCORE_BANKED",
   REQUEST_FAILED: "REQUEST_FAILED",
@@ -32,10 +32,8 @@ const DICE_COUNT = 6;
 
 function createInitialState() {
   return {
-    // The latest authoritative game snapshot from the server.
     game: null,
 
-    // Browser-only state used to present and interact with that snapshot.
     ui: {
       initialized: false,
       screen: SCREEN.WELCOME,
@@ -46,6 +44,7 @@ function createInitialState() {
       selectionIsValid: false,
       selectedScore: 0,
       rollioActive: false,
+      hotDiceActive: false,
       message: "",
       lastApiResponse: null,
     },
@@ -72,14 +71,12 @@ function resetTray() {
   state.ui.trayValues = Array(DICE_COUNT).fill(null);
   state.ui.heldIndexes = new Set();
   state.ui.rollioActive = false;
+  state.ui.hotDiceActive = false;
+
   clearSelection();
 }
 
 function getOpenTrayIndexes() {
-  if (state.ui.heldIndexes.size === DICE_COUNT) {
-    return Array.from({ length: DICE_COUNT }, (_, index) => index);
-  }
-
   const indexes = [];
 
   for (let index = 0; index < DICE_COUNT; index += 1) {
@@ -103,8 +100,13 @@ function placeDiceInOpenSlots(rolledDice) {
 
   const nextTrayValues = [...state.ui.trayValues];
 
-  for (let offset = 0; offset < openIndexes.length; offset += 1) {
-    nextTrayValues[openIndexes[offset]] = rolledDice[offset];
+  for (
+    let offset = 0;
+    offset < openIndexes.length;
+    offset += 1
+  ) {
+    nextTrayValues[openIndexes[offset]] =
+      rolledDice[offset];
   }
 
   state.ui.trayValues = nextTrayValues;
@@ -126,38 +128,60 @@ function handleGameStarted({ game }) {
   state.game = game;
   state.ui.screen = SCREEN.PLAY;
   state.ui.phase = UI_PHASE.IDLE;
+
   resetTray();
 }
 
-function handleRollStarted() {
+function handleRollStarted({
+  selectedIndexes = [],
+} = {}) {
   state.ui.phase = UI_PHASE.ROLLING;
   state.ui.message = "Rolling...";
 
-  if (state.ui.rollioActive || state.ui.heldIndexes.size === DICE_COUNT) {
+  if (state.ui.rollioActive) {
     resetTray();
   }
 
-  clearSelection();
-}
-
-function handleDiceRolled({ game, rolledDice, rollio = false }) {
-  state.game = game;
-
-  if (rollio && rolledDice.length === DICE_COUNT) {
-    state.ui.trayValues = [...rolledDice];
-    state.ui.heldIndexes = new Set();
-  } else {
-    placeDiceInOpenSlots(rolledDice);
+  for (const index of selectedIndexes) {
+    state.ui.heldIndexes.add(index);
   }
 
-  state.ui.phase = rollio ? UI_PHASE.SUBMITTING : UI_PHASE.IDLE;
+  state.ui.hotDiceActive =
+    state.ui.heldIndexes.size === DICE_COUNT;
+
+  clearSelection();
+
+  if (state.ui.hotDiceActive) {
+    state.ui.trayValues =
+      Array(DICE_COUNT).fill(null);
+
+    state.ui.heldIndexes = new Set();
+  }
+}
+
+function handleDiceRolled({
+  game,
+  rolledDice,
+  rollio = false,
+}) {
+  state.game = game;
+
+  placeDiceInOpenSlots(rolledDice);
+
+  state.ui.phase = rollio
+    ? UI_PHASE.SUBMITTING
+    : UI_PHASE.IDLE;
 
   state.ui.rollioActive = rollio;
+  state.ui.hotDiceActive = false;
+
   clearSelection();
 }
 
 function handleDieSelectionToggled({ index }) {
-  const nextSelection = new Set(state.ui.selectedIndexes);
+  const nextSelection = new Set(
+    state.ui.selectedIndexes,
+  );
 
   if (nextSelection.has(index)) {
     nextSelection.delete(index);
@@ -168,25 +192,12 @@ function handleDieSelectionToggled({ index }) {
   state.ui.selectedIndexes = nextSelection;
 }
 
-function handleSelectionEvaluated({ valid, score }) {
+function handleSelectionEvaluated({
+  valid,
+  score,
+}) {
   state.ui.selectionIsValid = Boolean(valid);
   state.ui.selectedScore = score ?? 0;
-}
-
-function handleHoldStarted() {
-  state.ui.phase = UI_PHASE.SUBMITTING;
-  state.ui.message = "";
-}
-
-function handleHoldConfirmed({ game }) {
-  state.game = game;
-
-  for (const index of state.ui.selectedIndexes) {
-    state.ui.heldIndexes.add(index);
-  }
-
-  state.ui.phase = UI_PHASE.IDLE;
-  clearSelection();
 }
 
 function handleBankStarted() {
@@ -197,6 +208,7 @@ function handleBankStarted() {
 function handleScoreBanked({ game }) {
   state.game = game;
   state.ui.phase = UI_PHASE.IDLE;
+
   resetTray();
 }
 
@@ -215,28 +227,53 @@ function handleMessageSet({ message = "" }) {
 }
 
 const stateActionHandlers = Object.freeze({
-  [STATE_ACTION.RESET]: handleReset,
-  [STATE_ACTION.CLIENT_INITIALIZED]: handleClientInitialized,
-  [STATE_ACTION.API_RESPONSE_RECEIVED]: handleApiResponseReceived,
-  [STATE_ACTION.GAME_STARTED]: handleGameStarted,
-  [STATE_ACTION.ROLL_STARTED]: handleRollStarted,
-  [STATE_ACTION.DICE_ROLLED]: handleDiceRolled,
-  [STATE_ACTION.DIE_SELECTION_TOGGLED]: handleDieSelectionToggled,
-  [STATE_ACTION.SELECTION_EVALUATED]: handleSelectionEvaluated,
-  [STATE_ACTION.HOLD_STARTED]: handleHoldStarted,
-  [STATE_ACTION.HOLD_CONFIRMED]: handleHoldConfirmed,
-  [STATE_ACTION.BANK_STARTED]: handleBankStarted,
-  [STATE_ACTION.SCORE_BANKED]: handleScoreBanked,
-  [STATE_ACTION.REQUEST_FAILED]: handleRequestFailed,
-  [STATE_ACTION.MESSAGE_SET]: handleMessageSet,
-  [STATE_ACTION.ROLLIO_CLEARED]: handleRollioCleared,
+  [STATE_ACTION.RESET]:
+    handleReset,
+
+  [STATE_ACTION.CLIENT_INITIALIZED]:
+    handleClientInitialized,
+
+  [STATE_ACTION.API_RESPONSE_RECEIVED]:
+    handleApiResponseReceived,
+
+  [STATE_ACTION.GAME_STARTED]:
+    handleGameStarted,
+
+  [STATE_ACTION.ROLL_STARTED]:
+    handleRollStarted,
+
+  [STATE_ACTION.DICE_ROLLED]:
+    handleDiceRolled,
+
+  [STATE_ACTION.DIE_SELECTION_TOGGLED]:
+    handleDieSelectionToggled,
+
+  [STATE_ACTION.SELECTION_EVALUATED]:
+    handleSelectionEvaluated,
+
+  [STATE_ACTION.BANK_STARTED]:
+    handleBankStarted,
+
+  [STATE_ACTION.SCORE_BANKED]:
+    handleScoreBanked,
+
+  [STATE_ACTION.REQUEST_FAILED]:
+    handleRequestFailed,
+
+  [STATE_ACTION.MESSAGE_SET]:
+    handleMessageSet,
+
+  [STATE_ACTION.ROLLIO_CLEARED]:
+    handleRollioCleared,
 });
 
 export function dispatch(type, payload = {}) {
   const handler = stateActionHandlers[type];
 
   if (!handler) {
-    throw new Error(`Unknown state action: ${type}`);
+    throw new Error(
+      `Unknown state action: ${type}`,
+    );
   }
 
   handler(payload);
@@ -254,5 +291,9 @@ export function getSelectedDice() {
   return [...state.ui.selectedIndexes]
     .sort((left, right) => left - right)
     .map((index) => state.ui.trayValues[index])
-    .filter((value) => value !== null && value !== undefined);
+    .filter(
+      (value) =>
+        value !== null &&
+        value !== undefined,
+    );
 }

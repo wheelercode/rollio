@@ -183,12 +183,9 @@ function createStamp(className, text) {
 }
 
 function renderDiceStamps(state) {
-  const hotDiceActive =
-    state.ui.heldIndexes.size === 6 &&
-    getTurn(state.game).state === "READY_TO_CONTINUE";
-
   elements.rollioStamp.hidden = !state.ui.rollioActive;
-  elements.hotDiceStamp.hidden = !hotDiceActive;
+
+  elements.hotDiceStamp.hidden = !state.ui.hotDiceActive;
 }
 
 function renderScoreboard(state) {
@@ -219,8 +216,7 @@ function renderDiceTray(state) {
 
   const selectable =
     state.ui.phase === UI_PHASE.IDLE &&
-    (turnState === "WAITING_FOR_SELECTION" ||
-      turnState === "READY_TO_CONTINUE") &&
+    turnState === "WAITING_FOR_SELECTION" &&
     !state.ui.rollioActive;
 
   for (let index = 0; index < dieSlots.length; index += 1) {
@@ -243,24 +239,23 @@ function renderDiceTray(state) {
 function renderButtons(state) {
   const turnState = getTurn(state.game).state;
   const idle = state.ui.phase === UI_PHASE.IDLE;
-  const active = state.ui.initialized && state.game !== null && idle;
 
-  const canRoll =
-    active &&
-    (turnState === "READY_TO_ROLL" || turnState === "READY_TO_CONTINUE");
-
-  const canHold =
-    active &&
-    (turnState === "WAITING_FOR_SELECTION" ||
-      turnState === "READY_TO_CONTINUE") &&
-    state.ui.selectionIsValid &&
+  const active =
+    state.ui.initialized &&
+    state.game !== null &&
+    idle &&
     !state.ui.rollioActive;
 
-  const canBank = active && turnState === "READY_TO_CONTINUE";
+  const firstRoll = active && turnState === "READY_TO_ROLL";
 
-  elements.rollButton.disabled = !canRoll;
-  elements.holdButton.disabled = !canHold;
-  elements.bankButton.disabled = !canBank;
+  const validSelection =
+    active &&
+    turnState === "WAITING_FOR_SELECTION" &&
+    state.ui.selectionIsValid;
+
+  elements.rollButton.disabled = !(firstRoll || validSelection);
+
+  elements.bankButton.disabled = !validSelection;
 }
 
 function randomDieValue(previousValue = null) {
@@ -273,8 +268,13 @@ function randomDieValue(previousValue = null) {
   return value;
 }
 
-export function initialize({ onStart, onRoll, onHold, onBank, onDieSelected }) {
-  const handlers = { onStart, onRoll, onHold, onBank, onDieSelected };
+export function initialize({ onStart, onRoll, onBank, onDieSelected }) {
+  const handlers = {
+    onStart,
+    onRoll,
+    onBank,
+    onDieSelected,
+  };
 
   for (const [name, handler] of Object.entries(handlers)) {
     if (typeof handler !== "function") {
@@ -298,7 +298,6 @@ export function initialize({ onStart, onRoll, onHold, onBank, onDieSelected }) {
     selectedDice: document.getElementById("selectedDice"),
     message: document.getElementById("message"),
     rollButton: document.getElementById("rollButton"),
-    holdButton: document.getElementById("holdButton"),
     bankButton: document.getElementById("bankButton"),
     output: document.getElementById("output"),
     rolledDice: document.getElementById("rolledDice"),
@@ -319,7 +318,6 @@ export function initialize({ onStart, onRoll, onHold, onBank, onDieSelected }) {
 
   elements.startButton.addEventListener("click", onStart);
   elements.rollButton.addEventListener("click", onRoll);
-  elements.holdButton.addEventListener("click", onHold);
   elements.bankButton.addEventListener("click", onBank);
 }
 

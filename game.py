@@ -1,3 +1,5 @@
+# ACTION REQUIRED
+
 from collections import Counter
 from random import randint
 from uuid import uuid4
@@ -33,6 +35,7 @@ class Game:
                 else None
             ),
         }
+
     def start_game(self, players):
         if not players:
             return {
@@ -54,17 +57,41 @@ class Game:
             ),
         }
 
-    def roll(self, n_dice):
+    def roll(self, scoring_dice=None):
         if not self.playing:
             return {
                 "success": False,
                 "error": "The game is not playing.",
             }
 
-        if self.turn.state not in (
-            "READY_TO_ROLL",
-            "READY_TO_CONTINUE",
-        ):
+        scoring_dice = scoring_dice or []
+
+        if self.turn.state == "READY_TO_ROLL":
+            if scoring_dice:
+                return {
+                    "success": False,
+                    "error": (
+                        "No dice may be selected before the "
+                        "first roll of a turn."
+                    ),
+                }
+
+            selection_result = {
+                "success": True,
+                "held_dice": [],
+                "score": 0,
+                "score_groups": [],
+            }
+
+        elif self.turn.state == "WAITING_FOR_SELECTION":
+            selection_result = self._apply_selection(
+                scoring_dice
+            )
+
+            if selection_result["success"] is False:
+                return selection_result
+
+        else:
             return {
                 "success": False,
                 "error": "The turn is not ready for a roll.",
@@ -72,26 +99,15 @@ class Game:
 
         available_dice = 6 - len(self.turn.scored_dice)
 
-        # Hot dice: all six dice have scored, so six are available again.
+        # Hot dice: all six dice scored, so all six are
+        # available again.
         if available_dice == 0:
             available_dice = 6
-
-        if n_dice != available_dice:
-            return {
-                "success": False,
-                "error": (
-                    f"The turn must roll {available_dice} dice, "
-                    f"not {n_dice}."
-                ),
-            }
-
-        # Begin a new hot-dice set.
-        if len(self.turn.scored_dice) == 6:
             self.turn.scored_dice = []
 
         self.turn.rolled_dice = [
             randint(1, 6)
-            for _ in range(n_dice)
+            for _ in range(available_dice)
         ]
 
         self.turn.roll_number += 1
@@ -112,36 +128,42 @@ class Game:
                 "success": True,
                 "rollio": True,
                 "rolled_dice": rolled_dice,
+                "held_dice": selection_result["held_dice"],
+                "held_score": selection_result["score"],
+                "score_groups": (
+                    selection_result["score_groups"]
+                ),
                 "lost_score": lost_score,
-                "previous_player_id": previous_player.player_id,
-                "current_player_id": self.current_player.player_id,
+                "previous_player_id": (
+                    previous_player.player_id
+                ),
+                "current_player_id": (
+                    self.current_player.player_id
+                ),
             }
 
         return {
             "success": True,
             "rollio": False,
             "rolled_dice": self.turn.rolled_dice,
+            "held_dice": selection_result["held_dice"],
+            "held_score": selection_result["score"],
+            "score_groups": (
+                selection_result["score_groups"]
+            ),
             "scored_dice": self.turn.scored_dice,
             "base_score": self.turn.base_score,
             "roll_number": self.turn.roll_number,
             "state": self.turn.state,
         }
 
-    def hold(self, scoring_dice):
-        if not self.playing:
-            return {
-                "success": False,
-                "error": "The game is not playing.",
-            }
-
-        if self.turn.state not in (
-            "WAITING_FOR_SELECTION",
-            "READY_TO_CONTINUE",
-        ):
+    def _apply_selection(self, scoring_dice):
+        if self.turn.state != "WAITING_FOR_SELECTION":
             return {
                 "success": False,
                 "error": (
-                    "The turn is not waiting for a dice selection."
+                    "The turn is not waiting for a "
+                    "dice selection."
                 ),
             }
 
@@ -164,7 +186,9 @@ class Game:
                     ),
                 }
 
-        scoring_result = self.score_selection(scoring_dice)
+        scoring_result = self.score_selection(
+            scoring_dice
+        )
 
         if scoring_result is None:
             return {
@@ -175,8 +199,10 @@ class Game:
                 ),
             }
 
+        held_dice = sorted(scoring_dice)
+
         self.turn.base_score += scoring_result["score"]
-        self.turn.scored_dice.extend(sorted(scoring_dice))
+        self.turn.scored_dice.extend(held_dice)
 
         remaining_dice = list(self.turn.rolled_dice)
 
@@ -184,17 +210,57 @@ class Game:
             remaining_dice.remove(die)
 
         self.turn.rolled_dice = remaining_dice
-        self.turn.state = "READY_TO_CONTINUE"
 
         return {
             "success": True,
-            "held_dice": sorted(scoring_dice),
+            "held_dice": held_dice,
             "score": scoring_result["score"],
             "score_groups": scoring_result["groups"],
             "scored_dice": self.turn.scored_dice,
             "base_score": self.turn.base_score,
-            "roll_number": self.turn.roll_number,
-            "state": self.turn.state,
+        }
+
+    def bank(self, scoring_dice):
+        if not self.playing:
+            return {
+                "success": False,
+                "error": "The game is not playing.",
+            }
+
+        if self.turn.state != "WAITING_FOR_SELECTION":
+            return {
+                "success": False,
+                "error": "The turn is not ready to bank.",
+            }
+
+        selection_result = self._apply_selection(
+            scoring_dice
+        )
+
+        if selection_result["success"] is False:
+            return selection_result
+
+        previous_player = self.current_player
+        banked_score = self.turn.base_score
+
+        previous_player.score += banked_score
+
+        self._next_turn()
+
+        return {
+            "success": True,
+            "held_dice": selection_result["held_dice"],
+            "held_score": selection_result["score"],
+            "score_groups": (
+                selection_result["score_groups"]
+            ),
+            "banked_score": banked_score,
+            "previous_player_id": (
+                previous_player.player_id
+            ),
+            "current_player_id": (
+                self.current_player.player_id
+            ),
         }
 
     def score(self, dice):
@@ -321,7 +387,8 @@ class Game:
 
                 if (
                     best_result is None
-                    or candidate["score"] > best_result["score"]
+                    or candidate["score"]
+                    > best_result["score"]
                 ):
                     best_result = candidate
 
@@ -367,39 +434,6 @@ class Game:
         self.current_player.turn_number += 1
         self.current_player = self.players[next_index]
         self.turn = Turn()
-
-    def bank(self):
-        if not self.playing:
-            return {
-                "success": False,
-                "error": "The game is not playing.",
-            }
-
-        if self.turn.state != "READY_TO_CONTINUE":
-            return {
-                "success": False,
-                "error": "The turn is not ready to bank.",
-            }
-
-        if self.turn.base_score == 0:
-            return {
-                "success": False,
-                "error": "There is no turn score to bank.",
-            }
-
-        previous_player = self.current_player
-        banked_score = self.turn.base_score
-
-        previous_player.score += banked_score
-
-        self._next_turn()
-
-        return {
-            "success": True,
-            "banked_score": banked_score,
-            "previous_player_id": previous_player.player_id,
-            "current_player_id": self.current_player.player_id,
-        }
 
 
 class Player:

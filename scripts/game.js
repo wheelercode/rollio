@@ -16,7 +16,6 @@ let rollAnimationPromise = null;
 const apiResponseHandlers = Object.freeze({
   GAME_STARTED: handleGameStarted,
   DICE_ROLLED: handleDiceRolled,
-  DICE_HELD: handleDiceHeld,
   SCORE_BANKED: handleScoreBanked,
   ERROR: handleError,
 });
@@ -124,16 +123,8 @@ async function handleDiceRolled(eventData, apiResponse) {
   }
 
   setMessage(
-    "Select the scoring dice you want to hold.",
+    "Select scoring dice, then Roll again or Bank.",
   );
-}
-
-function handleDiceHeld(eventData, apiResponse) {
-  dispatch(STATE_ACTION.HOLD_CONFIRMED, {
-    game: apiResponse.game,
-  });
-
-  setMessage(`Held for +${eventData.score}.`);
 }
 
 function handleScoreBanked(
@@ -235,16 +226,36 @@ export async function roll() {
   }
 
   const gameId = state.game?.game_id;
+  const turnState = getTurnState();
+  const scoringDice = getSelectedDice();
+  const selectedIndexes = [
+    ...state.ui.selectedIndexes,
+  ];
 
   if (!gameId) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: "No active game was found.",
     });
+
     render();
     return;
   }
 
-  dispatch(STATE_ACTION.ROLL_STARTED);
+  const firstRoll =
+    turnState === "READY_TO_ROLL";
+
+  const continuedRoll =
+    turnState === "WAITING_FOR_SELECTION" &&
+    state.ui.selectionIsValid &&
+    scoringDice.length > 0;
+
+  if (!firstRoll && !continuedRoll) {
+    return;
+  }
+
+  dispatch(STATE_ACTION.ROLL_STARTED, {
+    selectedIndexes,
+  });
 
   const openIndexes = getOpenIndexes();
 
@@ -265,7 +276,7 @@ export async function roll() {
   try {
     await callApi("/game/roll", {
       game_id: gameId,
-      n_dice: openIndexes.length,
+      scoring_dice: scoringDice,
     });
   } catch (error) {
     if (rollAnimationPromise) {
@@ -319,12 +330,16 @@ export async function hold() {
   }
 }
 
-// ACTION REQUIRED
-
 export async function bank() {
   const state = getState();
+  const scoringDice = getSelectedDice();
 
-  if (state.ui.phase !== UI_PHASE.IDLE) {
+  if (
+    state.ui.phase !== UI_PHASE.IDLE ||
+    getTurnState() !== "WAITING_FOR_SELECTION" ||
+    !state.ui.selectionIsValid ||
+    scoringDice.length === 0
+  ) {
     return;
   }
 
@@ -334,6 +349,7 @@ export async function bank() {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: "No active game was found.",
     });
+
     render();
     return;
   }
@@ -344,6 +360,7 @@ export async function bank() {
   try {
     await callApi("/game/bank", {
       game_id: gameId,
+      scoring_dice: scoringDice,
     });
   } catch (error) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
@@ -362,7 +379,6 @@ export function toggleDieSelection(index) {
     state.ui.phase !== UI_PHASE.IDLE ||
     ![
       "WAITING_FOR_SELECTION",
-      "READY_TO_CONTINUE",
     ].includes(getTurnState()) ||
     value === null ||
     value === undefined ||
@@ -413,7 +429,6 @@ export async function initialize() {
   ui.initialize({
     onStart: startGame,
     onRoll: roll,
-    onHold: hold,
     onBank: bank,
     onDieSelected: toggleDieSelection,
   });

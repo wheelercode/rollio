@@ -150,11 +150,12 @@
 }
 
 .game-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 220px));
   justify-content: center;
   gap: 14px;
 
-  margin-top: 28px;
+  margin: 28px auto 0;
 }
 
 .game-action {
@@ -247,7 +248,7 @@
   }
 
   .game-actions {
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .game-action {
