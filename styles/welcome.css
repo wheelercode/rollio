@@ -1,11 +1,9 @@
 #startSection {
   position: relative;
   isolation: isolate;
-
   display: grid;
   min-height: 100vh;
   place-items: center;
-
   padding: 32px;
 }
 
@@ -13,15 +11,8 @@
   position: fixed;
   z-index: -2;
   inset: 0;
-
   content: "";
-
-  background:
-    linear-gradient(
-      rgba(4, 14, 22, 0.5),
-      rgba(4, 14, 22, 0.88)
-    );
-
+  background: linear-gradient(rgba(4, 14, 22, 0.5), rgba(4, 14, 22, 0.88));
   pointer-events: none;
 }
 
@@ -29,22 +20,11 @@
   position: fixed;
   z-index: -1;
   inset: 0;
-
   content: "";
-
   opacity: 0.18;
-
   background-image:
-    linear-gradient(
-      rgba(255, 255, 255, 0.025) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0.025) 1px,
-      transparent 1px
-    );
-
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
   background-size: 48px 48px;
   pointer-events: none;
 }
@@ -54,42 +34,24 @@
   width: min(100%, 980px);
   min-height: 590px;
   overflow: hidden;
-
-  grid-template-columns:
-    minmax(0, 1.05fr)
-    minmax(340px, 0.95fr);
-
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-large);
-
-  background:
-    linear-gradient(
-      145deg,
-      rgba(15, 40, 51, 0.97),
-      rgba(7, 22, 31, 0.98)
-    );
-
+  background: linear-gradient(145deg, rgba(15, 40, 51, 0.97), rgba(7, 22, 31, 0.98));
   box-shadow: var(--shadow-large);
   backdrop-filter: blur(18px);
 }
 
 .welcome-art {
   position: relative;
-
   display: flex;
   min-height: 590px;
   overflow: hidden;
   align-items: flex-end;
-
   padding: 42px;
-
   background-image:
-    linear-gradient(
-      rgba(4, 18, 24, 0.08),
-      rgba(4, 18, 24, 0.72)
-    ),
+    linear-gradient(rgba(4, 18, 24, 0.08), rgba(4, 18, 24, 0.72)),
     url("../assets/rollio-welcome.png");
-
   background-position: center;
   background-size: cover;
 }
@@ -97,16 +59,8 @@
 .welcome-art::before {
   position: absolute;
   inset: 0;
-
   content: "";
-
-  background:
-    radial-gradient(
-      circle at center,
-      transparent 20%,
-      rgba(3, 12, 18, 0.62) 100%
-    );
-
+  background: radial-gradient(circle at center, transparent 20%, rgba(3, 12, 18, 0.62) 100%);
   pointer-events: none;
 }
 
@@ -114,17 +68,13 @@
   position: absolute;
   top: 50%;
   left: 50%;
-
   display: grid;
   width: min(72%, 350px);
   aspect-ratio: 1;
   place-items: center;
-
   transform: translate(-50%, -54%);
-
   border: 1px dashed rgba(255, 255, 255, 0.22);
   border-radius: 50%;
-
   color: rgba(255, 255, 255, 0.45);
   text-align: center;
   letter-spacing: 0.08em;
@@ -135,16 +85,13 @@
 .welcome-art__caption {
   position: relative;
   z-index: 1;
-
   max-width: 360px;
 }
 
 .welcome-art__caption strong {
   display: block;
   margin-bottom: 8px;
-
   color: var(--accent-light);
-
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -153,9 +100,7 @@
 
 .welcome-art__caption p {
   margin: 0;
-
   color: var(--text-secondary);
-
   font-size: 0.95rem;
   line-height: 1.65;
 }
@@ -165,7 +110,6 @@
   min-width: 0;
   flex-direction: column;
   justify-content: center;
-
   padding: clamp(40px, 6vw, 76px);
 }
 
@@ -173,11 +117,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-
   margin-bottom: 30px;
-
   color: var(--accent-light);
-
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.18em;
@@ -187,31 +128,24 @@
 .brand-mark::before {
   width: 34px;
   height: 2px;
-
   content: "";
-
   border-radius: 999px;
   background: var(--accent);
 }
 
 .welcome-title {
   margin: 0;
-
   font-size: clamp(4rem, 9vw, 6.6rem);
   font-weight: 900;
   letter-spacing: -0.075em;
   line-height: 0.82;
 }
 
-.welcome-title span {
-  color: var(--accent);
-}
+.welcome-title span { color: var(--accent); }
 
 .welcome-tagline {
   margin: 22px 0 42px;
-
   color: var(--text-secondary);
-
   font-size: 1rem;
   line-height: 1.7;
 }
@@ -226,9 +160,7 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 10px;
-
   color: var(--text-primary);
-
   font-size: clamp(1.25rem, 3vw, 1.65rem);
   font-weight: 650;
 }
@@ -236,159 +168,70 @@
 .player-name-input {
   min-width: 0;
   width: 190px;
-
   padding: 4px 4px 7px;
-
   border: 0;
   border-bottom: 2px solid rgba(244, 185, 66, 0.5);
   outline: none;
-
   color: var(--accent-light);
   background: transparent;
-
   font-size: inherit;
   font-weight: 750;
 }
 
-.player-name-input:focus {
-  border-bottom-color: var(--accent);
-}
-
-.player-name-input::placeholder {
-  color: var(--text-muted);
-}
+.player-name-input:focus { border-bottom-color: var(--accent); }
+.player-name-input::placeholder { color: var(--text-muted); }
 
 .welcome-instruction {
   margin: -5px 0 4px;
-
   color: var(--text-secondary);
-
   font-size: 0.95rem;
 }
 
 .primary-button {
   min-height: 58px;
-
   padding: 0 26px;
-
   border-radius: var(--radius-medium);
   cursor: pointer;
-
   color: #14202a;
-
-  background:
-    linear-gradient(
-      135deg,
-      var(--accent-light),
-      var(--accent)
-    );
-
+  background: linear-gradient(135deg, var(--accent-light), var(--accent));
   box-shadow:
     0 14px 30px rgba(201, 130, 18, 0.24),
     inset 0 1px rgba(255, 255, 255, 0.45);
-
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-
-  transition:
-    transform 150ms ease,
-    box-shadow 150ms ease,
-    filter 150ms ease;
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
 }
 
 .primary-button:hover {
   transform: translateY(-2px);
   filter: brightness(1.05);
-
   box-shadow:
     0 18px 36px rgba(201, 130, 18, 0.31),
     inset 0 1px rgba(255, 255, 255, 0.5);
 }
 
-.primary-button:active {
-  transform: translateY(0);
-}
-
-.developer-settings {
-  margin-top: 24px;
-
-  color: var(--text-muted);
-
-  font-size: 0.78rem;
-}
-
-.developer-settings summary {
-  width: fit-content;
-
-  cursor: pointer;
-  user-select: none;
-}
-
-.developer-settings label {
-  display: grid;
-  gap: 7px;
-
-  margin-top: 12px;
-}
-
-.developer-settings input {
-  width: 100%;
-
-  padding: 10px 12px;
-
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--radius-small);
-  outline: none;
-
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.07);
-}
+.primary-button:active { transform: translateY(0); }
 
 @media (max-width: 800px) {
-  #startSection {
-    padding: 20px;
-  }
-
+  #startSection { padding: 20px; }
   .welcome-panel {
     width: min(100%, 540px);
     min-height: unset;
-
     grid-template-columns: 1fr;
   }
-
   .welcome-art {
     min-height: 270px;
     padding: 26px;
   }
-
-  .welcome-art__caption {
-    display: none;
-  }
-
-  .welcome-content {
-    padding: 42px 30px 46px;
-  }
-
-  .welcome-title {
-    font-size: clamp(4rem, 20vw, 5.8rem);
-  }
+  .welcome-art__caption { display: none; }
+  .welcome-content { padding: 42px 30px 46px; }
+  .welcome-title { font-size: clamp(4rem, 20vw, 5.8rem); }
 }
 
 @media (max-width: 480px) {
-  #startSection {
-    padding: 14px;
-  }
-
-  .welcome-content {
-    padding: 34px 23px 38px;
-  }
-
-  .welcome-line {
-    display: grid;
-  }
-
-  .player-name-input {
-    width: 100%;
-  }
+  #startSection { padding: 14px; }
+  .welcome-content { padding: 34px 23px 38px; }
+  .welcome-line { display: grid; }
+  .player-name-input { width: 100%; }
 }

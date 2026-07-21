@@ -15,7 +15,6 @@ export const UI_PHASE = Object.freeze({
 export const STATE_ACTION = Object.freeze({
   RESET: "RESET",
   CLIENT_INITIALIZED: "CLIENT_INITIALIZED",
-  API_RESPONSE_RECEIVED: "API_RESPONSE_RECEIVED",
   GAME_ROOM_ENTERED: "GAME_ROOM_ENTERED",
   GAME_STARTED: "GAME_STARTED",
   ROLL_STARTED: "ROLL_STARTED",
@@ -52,7 +51,6 @@ function createInitialState() {
       rollioStampVisible: false,
       hotDiceActive: false,
       message: "",
-      lastApiResponse: null,
     },
   };
 }
@@ -126,10 +124,6 @@ function handleReset() {
 
 function handleClientInitialized() {
   state.ui.initialized = true;
-}
-
-function handleApiResponseReceived({ apiResponse }) {
-  state.ui.lastApiResponse = apiResponse;
 }
 
 function handleGameRoomEntered() {
@@ -263,9 +257,6 @@ const stateActionHandlers = Object.freeze({
 
   [STATE_ACTION.CLIENT_INITIALIZED]:
     handleClientInitialized,
-
-  [STATE_ACTION.API_RESPONSE_RECEIVED]:
-    handleApiResponseReceived,
 
   [STATE_ACTION.GAME_ROOM_ENTERED]:
     handleGameRoomEntered,

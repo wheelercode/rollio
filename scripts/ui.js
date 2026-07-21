@@ -247,8 +247,6 @@ function renderScoreboard(state) {
     rightPlayer?.player_id === currentPlayerId,
   );
 
-  elements.targetScore.textContent = game?.target_score ?? 0;
-
   const authoritativeTurnScore = turn.base_score ?? 0;
   const selectedScore = state.ui.selectedScore ?? 0;
   const submittedScore = state.ui.submittedScore ?? 0;
@@ -258,15 +256,6 @@ function renderScoreboard(state) {
     selectedScore +
     submittedScore;
 
-  elements.rollNumber.textContent = turn.roll_number ?? 0;
-
-  const scoredDice = Array.isArray(turn.scored_dice) ? turn.scored_dice : [];
-  elements.scoredDice.textContent =
-    scoredDice.length > 0 ? scoredDice.join(", ") : "None";
-
-  const selectedDice = getSelectedDice(state);
-  elements.selectedDice.textContent =
-    selectedDice.length > 0 ? selectedDice.join(", ") : "None";
 }
 
 function renderDiceTray(state) {
@@ -363,15 +352,10 @@ export function initialize({
     playerScore: document.getElementById("playerScore"),
     opponentNameDisplay: document.getElementById("opponentNameDisplay"),
     opponentScore: document.getElementById("opponentScore"),
-    targetScore: document.getElementById("targetScore"),
     turnScore: document.getElementById("turnScore"),
-    rollNumber: document.getElementById("rollNumber"),
-    scoredDice: document.getElementById("scoredDice"),
-    selectedDice: document.getElementById("selectedDice"),
     message: document.getElementById("message"),
     rollButton: document.getElementById("rollButton"),
     bankButton: document.getElementById("bankButton"),
-    output: document.getElementById("output"),
     rolledDice: document.getElementById("rolledDice"),
     matchmakingStatus:
       document.getElementById("matchmakingStatus"),
@@ -496,9 +480,6 @@ export function render(state) {
   renderDiceStamps(state);
   elements.message.textContent = state.ui.message;
   renderButtons(state);
-  elements.output.textContent = state.ui.lastApiResponse
-    ? JSON.stringify(state.ui.lastApiResponse, null, 2)
-    : "No request sent yet.";
 }
 
 function getFeedbackTone(groups, difference) {

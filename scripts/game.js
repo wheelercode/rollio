@@ -363,8 +363,6 @@ function validateApiResponse(apiResponse) {
 async function handleApiResponse(apiResponse) {
   validateApiResponse(apiResponse);
 
-  dispatch(STATE_ACTION.API_RESPONSE_RECEIVED, { apiResponse });
-
   const handler = apiResponseHandlers[apiResponse.game_event];
 
   if (!handler) {
@@ -595,7 +593,7 @@ export function toggleDieSelection(index) {
     return;
   }
 
-  const previousResult = scoreSelection(ui.getSelectedDice(state));
+  const previousResult = scoreSelection(ui.getSelectedDice(getState()));
   const previousSelectionScore = previousResult.score;
 
   dispatch(STATE_ACTION.DIE_SELECTION_TOGGLED, { index });
