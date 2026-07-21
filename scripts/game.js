@@ -19,6 +19,8 @@ import {
 } from "./websockets.js";
 
 let rollAnimationPromise = null;
+let bankAnimationPromise = null;
+let predictedBank = null;
 
 const apiResponseHandlers = Object.freeze({
   GAME_STARTED: handleGameStarted,
@@ -146,22 +148,49 @@ async function handleDiceRolled(eventData, apiResponse) {
     dispatch(STATE_ACTION.ROLLIO_CLEARED);
 
     setMessage(`${currentName}, press Roll to begin your turn.`);
-
     return;
   }
 
   setMessage("Select scoring dice, then Roll again or Bank.");
 }
 
-function handleScoreBanked(eventData, apiResponse) {
-  dispatch(STATE_ACTION.SCORE_BANKED, {
-    game: apiResponse.game_state,
-  });
+async function handleScoreBanked(eventData, apiResponse) {
+  if (bankAnimationPromise) {
+    await bankAnimationPromise;
+    bankAnimationPromise = null;
+  }
 
   const previousPlayer = getPlayerById(
     apiResponse.game_state,
     eventData.previous_player_id,
   );
+
+  if (predictedBank && previousPlayer) {
+    const authoritativePlayerScore = previousPlayer.score ?? 0;
+
+    if (
+      authoritativePlayerScore !==
+      predictedBank.toPlayerScore
+    ) {
+      console.warn(
+        "Client/server bank score mismatch:",
+        {
+          predictedPlayerScore:
+            predictedBank.toPlayerScore,
+          authoritativePlayerScore,
+          difference:
+            authoritativePlayerScore -
+            predictedBank.toPlayerScore,
+        },
+      );
+    }
+  }
+
+  predictedBank = null;
+
+  dispatch(STATE_ACTION.SCORE_BANKED, {
+    game: apiResponse.game_state,
+  });
 
   const currentPlayer = getPlayerById(
     apiResponse.game_state,
@@ -360,14 +389,48 @@ export async function bank() {
     return;
   }
 
+  const currentPlayer = getPlayerById(
+    state.game,
+    state.game?.current_player_id,
+  );
+
+  const authoritativeTurnScore =
+    state.game?.turn?.base_score ?? 0;
+
+  const bankedScore =
+    authoritativeTurnScore +
+    (state.ui.selectedScore ?? 0) +
+    (state.ui.submittedScore ?? 0);
+
+  const fromPlayerScore = currentPlayer?.score ?? 0;
+  const toPlayerScore =
+    fromPlayerScore + bankedScore;
+
+  predictedBank = {
+    bankedScore,
+    fromPlayerScore,
+    toPlayerScore,
+  };
+
   dispatch(STATE_ACTION.BANK_STARTED);
   render();
+
+  bankAnimationPromise = ui.animateBankTransfer(
+    predictedBank,
+  );
 
   try {
     sendCommand("BANK", {
       scoring_dice: scoringDice,
     });
   } catch (error) {
+    if (bankAnimationPromise) {
+      await bankAnimationPromise;
+      bankAnimationPromise = null;
+    }
+
+    predictedBank = null;
+
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: error.message,
     });
@@ -382,7 +445,7 @@ export function toggleDieSelection(index) {
 
   if (
     state.ui.phase !== UI_PHASE.IDLE ||
-    !["WAITING_FOR_SELECTION"].includes(getTurnState()) ||
+    getTurnState() !== "WAITING_FOR_SELECTION" ||
     value === null ||
     value === undefined ||
     state.ui.heldIndexes.has(index) ||
@@ -391,12 +454,15 @@ export function toggleDieSelection(index) {
     return;
   }
 
+  const previousResult = scoreSelection(getSelectedDice());
+  const previousSelectionScore = previousResult.score;
+
   dispatch(STATE_ACTION.DIE_SELECTION_TOGGLED, { index });
 
   const selectedDice = getSelectedDice();
   const result = scoreSelection(selectedDice);
-
   const valid = selectedDice.length > 0 && result.valid;
+  const nextSelectionScore = result.score;
 
   dispatch(STATE_ACTION.SELECTION_EVALUATED, {
     valid,
@@ -406,12 +472,33 @@ export function toggleDieSelection(index) {
   if (selectedDice.length === 0) {
     setMessage("");
   } else if (valid) {
-    setMessage(`Valid selection: +${result.score}`);
+    setMessage(
+      result.groups
+        .map((group) => group.label)
+        .join(" • "),
+    );
   } else {
     setMessage("Every selected die must be part of a scoring group.");
   }
 
   render();
+
+  const scoreDifference =
+    nextSelectionScore - previousSelectionScore;
+
+  if (scoreDifference !== 0) {
+    const authoritativeTurnScore =
+      state.game?.turn?.base_score ?? 0;
+
+    ui.animateScoringFeedback({
+      fromScore:
+        authoritativeTurnScore + previousSelectionScore,
+      toScore:
+        authoritativeTurnScore + nextSelectionScore,
+      difference: scoreDifference,
+      groups: result.groups,
+    });
+  }
 }
 
 export async function initialize() {

@@ -33,33 +33,22 @@
 
 .die-slot {
   position: relative;
-
   display: grid;
   place-items: center;
-
   min-width: 0;
   padding: 0;
-
   aspect-ratio: 1 / 1;
-
   border:
     var(--die-slot-border-width)
     dashed
     var(--die-slot-empty-color);
-
   border-radius: var(--die-slot-border-radius);
-
   background: var(--die-slot-background);
 }
-
-/*
- * Empty slot
- */
 
 .die-slot--empty {
   border-style: dashed;
   border-color: var(--die-slot-empty-color);
-
   background:
     linear-gradient(
       145deg,
@@ -68,44 +57,26 @@
     );
 }
 
-/*
- * Filled and available
- */
-
 .die-slot--filled {
   border-style: dashed;
   border-color: var(--die-slot-filled-color);
 }
 
-/*
- * Selected for holding
- */
-
 .die-slot--selected {
   border-style: solid;
   border-color: var(--die-slot-selected-color);
-
   background: var(--die-slot-selected-background);
 }
 
-/*
- * Die has finished its rolling animation
- */
 .die-slot--settled {
   border-style: solid;
   border-color: var(--die-slot-settled-color);
-
   background: var(--die-slot-settled-background);
 }
-
-/*
- * Successfully held by the server
- */
 
 .die-slot--held {
   border-style: solid;
   border-color: var(--die-slot-held-color);
-
   background: var(--die-slot-held-background);
 }
 
@@ -113,31 +84,17 @@
   opacity: var(--die-held-opacity);
 }
 
-/*
- * Scoring state
- */
-
 .die-slot--scored {
   border-style: solid;
   border-color: var(--die-slot-scored-color);
-
   background: var(--die-slot-scored-background);
 }
-
-/*
- * Rollio state
- */
 
 .die-slot--rollio {
   border-style: solid;
   border-color: var(--die-slot-rollio-color);
-
   background: var(--die-slot-rollio-background);
 }
-
-/*
- * Button behavior
- */
 
 button.die-slot {
   cursor: pointer;
@@ -146,11 +103,7 @@ button.die-slot {
 
 button.die-slot:hover:not(:disabled) {
   z-index: 1;
-
-  transform: scale(
-    var(--die-slot-hover-scale)
-  );
-
+  transform: scale(var(--die-slot-hover-scale));
   border-color: var(--die-slot-hover-color);
   background: var(--die-slot-hover-background);
 }
@@ -159,20 +112,11 @@ button.die-slot:disabled {
   cursor: default;
 }
 
-/*
- * Die SVG
- */
-
 .die-face {
   display: block;
-
   width: 100%;
   height: 100%;
 }
-
-/*
- * Responsive layout
- */
 
 @media (max-width: 800px) {
   .dice-tray {
@@ -186,34 +130,23 @@ button.die-slot:disabled {
   }
 }
 
-/*
- * Special roll stamps
- */
-
 .dice-stamp {
   position: absolute;
   z-index: 10;
   top: 50%;
   left: 50%;
-
   padding: 0.08em 0.28em;
-
   transform: translate(-50%, -50%) rotate(-45deg);
-
   border: 0.12em solid currentColor;
   border-radius: 0.12em;
-
   background: rgba(255, 255, 255, 0.88);
-
   font-size: clamp(2.5rem, 9vw, 7rem);
   font-weight: 1000;
   line-height: 0.95;
   letter-spacing: 0.04em;
   white-space: nowrap;
-
   pointer-events: none;
   user-select: none;
-
   filter: drop-shadow(0 0.08em 0 rgba(0, 0, 0, 0.24));
 }
 
@@ -223,4 +156,69 @@ button.die-slot:disabled {
 
 .dice-stamp--hot {
   color: #f59e0b;
+}
+
+.score-effects {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.score-float {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 1.28em;
+  padding: 0.1em 0.34em;
+  border: 0.075em solid currentColor;
+  border-radius: 0.16em;
+  background: rgba(8, 12, 20, 0.88);
+  font-size: clamp(2.25rem, 6vw, 4.75rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.015em;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  will-change: transform, opacity;
+}
+
+.score-float__value {
+  display: block;
+  line-height: 1;
+  transform: translateY(-0.06em);
+}
+
+.score-float--single {
+  color: #4ade80;
+}
+
+.score-float--kind {
+  color: #fbbf24;
+}
+
+.score-float--straight {
+  color: #22d3ee;
+}
+
+.score-float--combination {
+  color: #c084fc;
+}
+
+.score-float--removed {
+  color: #f87171;
+}
+
+.turn-score--counting {
+  display: inline-block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score-float {
+    display: none;
+  }
 }

@@ -17,13 +17,6 @@
  * feedback and enabling/disabling the Roll and Bank buttons.
  */
 
-/**
- * Validate and normalize an incoming dice array.
- *
- * @param {unknown} dice
- * @returns {number[]}
- * @throws {TypeError|RangeError}
- */
 function normalizeDice(dice) {
   if (!Array.isArray(dice)) {
     throw new TypeError("dice must be an array");
@@ -42,12 +35,6 @@ function normalizeDice(dice) {
   });
 }
 
-/**
- * Build a frequency map for dice values.
- *
- * @param {number[]} dice
- * @returns {Map<number, number>}
- */
 function countDice(dice) {
   const counts = new Map();
 
@@ -58,13 +45,6 @@ function countDice(dice) {
   return counts;
 }
 
-/**
- * Compare two number arrays for exact equality.
- *
- * @param {number[]} left
- * @param {number[]} right
- * @returns {boolean}
- */
 function arraysEqual(left, right) {
   return (
     left.length === right.length &&
@@ -72,21 +52,12 @@ function arraysEqual(left, right) {
   );
 }
 
-/**
- * Score one exact, indivisible scoring group.
- *
- * This is a direct translation of the current Python Game.score() function.
- *
- * @param {number[]} dice
- * @returns {number}
- */
 export function scoreGroup(dice) {
   const sortedDice = normalizeDice(dice).slice().sort((a, b) => a - b);
   const numberOfDice = sortedDice.length;
   const counts = countDice(sortedDice);
   const frequencyPattern = [...counts.values()].sort((a, b) => b - a);
 
-  // Two sets of three
   if (
     numberOfDice === 6 &&
     arraysEqual(frequencyPattern, [3, 3])
@@ -94,7 +65,6 @@ export function scoreGroup(dice) {
     return 2500;
   }
 
-  // Four of a kind plus a pair
   if (
     numberOfDice === 6 &&
     arraysEqual(frequencyPattern, [4, 2])
@@ -102,7 +72,6 @@ export function scoreGroup(dice) {
     return 1500;
   }
 
-  // Three pairs
   if (
     numberOfDice === 6 &&
     arraysEqual(frequencyPattern, [2, 2, 2])
@@ -110,28 +79,21 @@ export function scoreGroup(dice) {
     return 1500;
   }
 
-  // Straight
   if (arraysEqual(sortedDice, [1, 2, 3, 4, 5, 6])) {
     return 1500;
   }
 
-  // Three, four, five, or six of a kind
   if (
     [3, 4, 5, 6].includes(numberOfDice) &&
     counts.size === 1
   ) {
     const dieValue = sortedDice[0];
     const threeOfAKindScore =
-      dieValue === 1
-        ? 1000
-        : dieValue * 100;
+      dieValue === 1 ? 1000 : dieValue * 100;
 
-    const multiplier = 2 ** (numberOfDice - 3);
-
-    return threeOfAKindScore * multiplier;
+    return threeOfAKindScore * 2 ** (numberOfDice - 3);
   }
 
-  // Individual scoring dice
   if (arraysEqual(sortedDice, [1])) {
     return 100;
   }
@@ -143,15 +105,92 @@ export function scoreGroup(dice) {
   return 0;
 }
 
-/**
- * Return all valid scoring groups that can be removed from the supplied dice.
- *
- * Groups are represented as arrays of die values. Duplicate logical groups are
- * removed so the recursive evaluator does not repeat identical work.
- *
- * @param {number[]} dice
- * @returns {number[][]}
- */
+function describeScoringGroup(dice) {
+  const sortedDice = dice.slice().sort((a, b) => a - b);
+  const score = scoreGroup(sortedDice);
+  const counts = countDice(sortedDice);
+  const frequencyPattern = [...counts.values()].sort((a, b) => b - a);
+
+  if (
+    sortedDice.length === 6 &&
+    arraysEqual(frequencyPattern, [3, 3])
+  ) {
+    return {
+      dice: sortedDice,
+      score,
+      type: "TWO_TRIPLETS",
+      label: "Two sets of three!",
+      tone: "combination",
+    };
+  }
+
+  if (
+    sortedDice.length === 6 &&
+    arraysEqual(frequencyPattern, [4, 2])
+  ) {
+    return {
+      dice: sortedDice,
+      score,
+      type: "FOUR_AND_PAIR",
+      label: "Four of a kind plus a pair!",
+      tone: "combination",
+    };
+  }
+
+  if (
+    sortedDice.length === 6 &&
+    arraysEqual(frequencyPattern, [2, 2, 2])
+  ) {
+    return {
+      dice: sortedDice,
+      score,
+      type: "THREE_PAIRS",
+      label: "Three pairs!",
+      tone: "combination",
+    };
+  }
+
+  if (arraysEqual(sortedDice, [1, 2, 3, 4, 5, 6])) {
+    return {
+      dice: sortedDice,
+      score,
+      type: "STRAIGHT",
+      label: "Straight!",
+      tone: "straight",
+    };
+  }
+
+  if (
+    [3, 4, 5, 6].includes(sortedDice.length) &&
+    counts.size === 1
+  ) {
+    const words = {
+      3: "Three",
+      4: "Four",
+      5: "Five",
+      6: "Six",
+    };
+
+    return {
+      dice: sortedDice,
+      score,
+      type: `${sortedDice.length}_OF_A_KIND`,
+      label: `${words[sortedDice.length]} of a kind!`,
+      tone: "kind",
+    };
+  }
+
+  const dieValue = sortedDice[0];
+
+  return {
+    dice: sortedDice,
+    score,
+    type: dieValue === 1 ? "SINGLE_ONE" : "SINGLE_FIVE",
+    label: dieValue === 1 ? "Single 1" : "Single 5",
+    tone: "single",
+  };
+}
+
 function findAvailableScoringGroups(dice) {
   const sortedDice = dice.slice().sort((a, b) => a - b);
   const counts = countDice(sortedDice);
@@ -168,12 +207,10 @@ function findAvailableScoringGroups(dice) {
     }
   }
 
-  // Six-die special groups.
   if (sortedDice.length === 6) {
     addGroup(sortedDice);
   }
 
-  // Same-value groups of three through six.
   for (let dieValue = 1; dieValue <= 6; dieValue += 1) {
     const count = counts.get(dieValue) || 0;
     const maximumGroupSize = Math.min(count, 6);
@@ -183,7 +220,6 @@ function findAvailableScoringGroups(dice) {
     }
   }
 
-  // Individual ones and fives.
   if ((counts.get(1) || 0) > 0) {
     addGroup([1]);
   }
@@ -195,13 +231,6 @@ function findAvailableScoringGroups(dice) {
   return groups;
 }
 
-/**
- * Remove one occurrence of every die in a scoring group.
- *
- * @param {number[]} dice
- * @param {number[]} group
- * @returns {number[]|null}
- */
 function removeGroup(dice, group) {
   const remaining = dice.slice();
 
@@ -218,14 +247,6 @@ function removeGroup(dice, group) {
   return remaining;
 }
 
-/**
- * Find the maximum score obtainable from the supplied dice while also tracking
- * how many dice were consumed by scoring groups.
- *
- * @param {number[]} dice
- * @param {Map<string, {score: number, usedDice: number}>} memo
- * @returns {{score: number, usedDice: number}}
- */
 function evaluateSelection(dice, memo) {
   const sortedDice = dice.slice().sort((a, b) => a - b);
   const key = sortedDice.join(",");
@@ -236,12 +257,11 @@ function evaluateSelection(dice, memo) {
 
   let best = {
     score: 0,
-    usedDice: 0
+    usedDice: 0,
+    groups: [],
   };
 
-  const groups = findAvailableScoringGroups(sortedDice);
-
-  for (const group of groups) {
+  for (const group of findAvailableScoringGroups(sortedDice)) {
     const remaining = removeGroup(sortedDice, group);
 
     if (remaining === null) {
@@ -251,7 +271,8 @@ function evaluateSelection(dice, memo) {
     const remainderResult = evaluateSelection(remaining, memo);
     const candidate = {
       score: scoreGroup(group) + remainderResult.score,
-      usedDice: group.length + remainderResult.usedDice
+      usedDice: group.length + remainderResult.usedDice,
+      groups: [group, ...remainderResult.groups],
     };
 
     if (
@@ -269,20 +290,6 @@ function evaluateSelection(dice, memo) {
   return best;
 }
 
-/**
- * Score a complete user selection.
- *
- * The result is intended for immediate client UI feedback.
- *
- * @param {number[]} dice
- * @returns {{
- *   score: number,
- *   valid: boolean,
- *   allScoring: boolean,
- *   selectedDiceCount: number,
- *   scoringDiceCount: number
- * }}
- */
 export function scoreSelection(dice) {
   const normalizedDice = normalizeDice(dice);
 
@@ -292,7 +299,8 @@ export function scoreSelection(dice) {
       valid: false,
       allScoring: false,
       selectedDiceCount: 0,
-      scoringDiceCount: 0
+      scoringDiceCount: 0,
+      groups: [],
     };
   }
 
@@ -304,6 +312,7 @@ export function scoreSelection(dice) {
     valid: allScoring && result.score > 0,
     allScoring,
     selectedDiceCount: normalizedDice.length,
-    scoringDiceCount: result.usedDice
+    scoringDiceCount: result.usedDice,
+    groups: result.groups.map(describeScoringGroup),
   };
 }
