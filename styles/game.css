@@ -18,6 +18,11 @@
   margin-bottom: 28px;
 }
 
+.game-scoreboard--solo {
+  grid-template-columns: auto auto;
+  justify-content: center;
+}
+
 .player-score-card {
   display: grid;
   gap: 5px;
@@ -145,6 +150,7 @@
 @media (max-width: 800px) {
   #gameSection { align-items: start; }
   .game-scoreboard { grid-template-columns: 1fr 1fr; }
+  .game-scoreboard--solo { grid-template-columns: 1fr; }
   .turn-score {
     grid-column: 1 / -1;
     grid-row: 1;

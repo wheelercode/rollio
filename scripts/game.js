@@ -1,5 +1,3 @@
-// ACTION REQUIRED
-
 import { callApi, initializeApi } from "./http.js";
 import { scoreSelection } from "./scoring.js";
 import {

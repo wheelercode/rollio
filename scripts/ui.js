@@ -1,5 +1,3 @@
-// ACTION REQUIRED
-
 import { SCREEN, UI_PHASE } from "./state.js";
 import { delay } from "./utils.js";
 
@@ -224,10 +222,13 @@ function renderScoreboard(state) {
   elements.playerScore.textContent =
     leftPlayer?.score ?? 0;
 
-  elements.opponentNameDisplay.textContent =
-    rightPlayer?.name ?? "Player 2";
-  elements.opponentScore.textContent =
-    rightPlayer?.score ?? 0;
+  elements.rightPlayerCard.hidden = !rightPlayer;
+  elements.scoreboard.classList.toggle("game-scoreboard--solo", !rightPlayer);
+
+  if (rightPlayer) {
+    elements.opponentNameDisplay.textContent = rightPlayer.name ?? "Player 2";
+    elements.opponentScore.textContent = rightPlayer.score ?? 0;
+  }
 
   elements.leftPlayerLabel.textContent = "Player 1";
   elements.rightPlayerLabel.textContent = "Player 2";
@@ -380,6 +381,8 @@ export function initialize({
     elements.playerNameDisplay.closest(".player-score-card");
   elements.rightPlayerCard =
     elements.opponentNameDisplay.closest(".player-score-card");
+  elements.scoreboard =
+    elements.leftPlayerCard?.closest(".game-scoreboard");
 
   elements.leftPlayerLabel =
     elements.leftPlayerCard?.querySelector(
@@ -395,7 +398,8 @@ export function initialize({
     !elements.leftPlayerCard ||
     !elements.rightPlayerCard ||
     !elements.leftPlayerLabel ||
-    !elements.rightPlayerLabel
+    !elements.rightPlayerLabel ||
+    !elements.scoreboard
   ) {
     throw new Error("Player scoreboard cards were not found.");
   }

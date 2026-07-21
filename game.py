@@ -1,5 +1,3 @@
-# ACTION REQUIRED
-
 from collections import Counter
 from random import randint
 from uuid import uuid4
@@ -76,13 +74,7 @@ class Game:
                     ),
                 }
 
-            selection_result = {
-                "success": True,
-                "held_dice": [],
-                "score": 0,
-                "score_groups": [],
-            }
-
+            selected_score = 0
         elif self.turn.state == "WAITING_FOR_SELECTION":
             selection_result = self._apply_selection(
                 scoring_dice
@@ -91,6 +83,7 @@ class Game:
             if selection_result["success"] is False:
                 return selection_result
 
+            selected_score = selection_result["score"]
         else:
             return {
                 "success": False,
@@ -128,33 +121,17 @@ class Game:
                 "success": True,
                 "rollio": True,
                 "rolled_dice": rolled_dice,
-                "held_dice": selection_result["held_dice"],
-                "held_score": selection_result["score"],
-                "score_groups": (
-                    selection_result["score_groups"]
-                ),
+                "held_score": selected_score,
                 "lost_score": lost_score,
                 "previous_player_id": (
                     previous_player.player_id
-                ),
-                "current_player_id": (
-                    self.current_player.player_id
                 ),
             }
 
         return {
             "success": True,
             "rollio": False,
-            "rolled_dice": self.turn.rolled_dice,
-            "held_dice": selection_result["held_dice"],
-            "held_score": selection_result["score"],
-            "score_groups": (
-                selection_result["score_groups"]
-            ),
-            "scored_dice": self.turn.scored_dice,
-            "base_score": self.turn.base_score,
-            "roll_number": self.turn.roll_number,
-            "state": self.turn.state,
+            "held_score": selected_score,
         }
 
     def _apply_selection(self, scoring_dice):
@@ -200,8 +177,9 @@ class Game:
             }
 
         held_dice = sorted(scoring_dice)
+        selected_score = scoring_result["score"]
 
-        self.turn.base_score += scoring_result["score"]
+        self.turn.base_score += selected_score
         self.turn.scored_dice.extend(held_dice)
 
         remaining_dice = list(self.turn.rolled_dice)
@@ -213,11 +191,7 @@ class Game:
 
         return {
             "success": True,
-            "held_dice": held_dice,
-            "score": scoring_result["score"],
-            "score_groups": scoring_result["groups"],
-            "scored_dice": self.turn.scored_dice,
-            "base_score": self.turn.base_score,
+            "score": selected_score,
         }
 
     def bank(self, scoring_dice):
@@ -249,17 +223,9 @@ class Game:
 
         return {
             "success": True,
-            "held_dice": selection_result["held_dice"],
-            "held_score": selection_result["score"],
-            "score_groups": (
-                selection_result["score_groups"]
-            ),
             "banked_score": banked_score,
             "previous_player_id": (
                 previous_player.player_id
-            ),
-            "current_player_id": (
-                self.current_player.player_id
             ),
         }
 

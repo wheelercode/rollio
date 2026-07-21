@@ -1,5 +1,3 @@
-// ACTION REQUIRED
-
 export const SCREEN = Object.freeze({
   WELCOME: "WELCOME",
   PLAY: "PLAY",
