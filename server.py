@@ -368,6 +368,19 @@ def handle_select_dice_command(
             "Selected die indexes must be unique values from 0 through 5."
         )
 
+    if (
+        game.turn.mandatory_hot_dice
+        and set(selected_indexes) != set(range(6))
+    ):
+        return game_response(
+            game,
+            GameEvent.DICE_SELECTION_CHANGED,
+            {
+                "success": False,
+                "error": "All six hot dice must remain selected.",
+            },
+        )
+
     return game_response(
         game,
         GameEvent.DICE_SELECTION_CHANGED,

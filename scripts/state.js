@@ -1,3 +1,5 @@
+import { scoreSelection } from "./scoring.js";
+
 export const SCREEN = Object.freeze({
   WELCOME: "WELCOME",
   PLAY: "PLAY",
@@ -128,6 +130,30 @@ function placeDiceInOpenSlots(rolledDice) {
   state.ui.trayValues = nextTrayValues;
 }
 
+function mandatoryHotDiceActive(game = state.game) {
+  return Boolean(game?.turn?.mandatory_hot_dice);
+}
+
+function forceMandatoryHotDiceSelection() {
+  if (!mandatoryHotDiceActive()) {
+    return;
+  }
+
+  const selectedIndexes = state.ui.trayValues
+    .map((value, index) => value === null ? null : index)
+    .filter((index) => index !== null);
+
+  const selectedDice = selectedIndexes.map(
+    (index) => state.ui.trayValues[index],
+  );
+  const result = scoreSelection(selectedDice);
+
+  state.ui.selectedIndexes = new Set(selectedIndexes);
+  state.ui.selectionIsValid = result.valid;
+  state.ui.selectedScore = result.score;
+  state.ui.message = "Hot dice—you must roll again.";
+}
+
 function handleReset() {
   replaceState(createInitialState());
 }
@@ -202,9 +228,14 @@ function handleDiceRolled({
   state.ui.hotDiceActive = false;
 
   clearSelection();
+  forceMandatoryHotDiceSelection();
 }
 
 function handleDieSelectionToggled({ index }) {
+  if (mandatoryHotDiceActive()) {
+    return;
+  }
+
   const nextSelection = new Set(
     state.ui.selectedIndexes,
   );
@@ -219,6 +250,11 @@ function handleDieSelectionToggled({ index }) {
 }
 
 function handleDiceSelectionSynced({ selectedIndexes = [] }) {
+  if (mandatoryHotDiceActive()) {
+    forceMandatoryHotDiceSelection();
+    return;
+  }
+
   state.ui.selectedIndexes = new Set(selectedIndexes);
 }
 
@@ -246,9 +282,21 @@ function handleTrayValuesCleared() {
   state.ui.trayValues = Array(DICE_COUNT).fill(null);
 }
 
-function handleRequestFailed({ message }) {
+function handleRequestFailed({ message, game = null }) {
   state.ui.phase = UI_PHASE.IDLE;
   state.ui.submittedScore = 0;
+
+  if (game) {
+    state.game = game;
+
+    if (mandatoryHotDiceActive(game)) {
+      state.ui.trayValues = [...game.turn.rolled_dice];
+      state.ui.heldIndexes = new Set();
+      clearSelection();
+      forceMandatoryHotDiceSelection();
+    }
+  }
+
   state.ui.message = message ?? "Request failed.";
 }
 
@@ -364,4 +412,3 @@ export function getState() {
 export function getOpenIndexes() {
   return getOpenTrayIndexes();
 }
-

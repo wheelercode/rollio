@@ -273,6 +273,11 @@ async function handleDiceRolled(eventData, apiResponse) {
     return;
   }
 
+  if (apiResponse.game_state?.turn?.mandatory_hot_dice) {
+    setMessage("Hot dice—you must roll again.");
+    return;
+  }
+
   setMessage(
     toPlayerMessage(
       getCurrentPlayerName(apiResponse.game_state),
@@ -391,7 +396,12 @@ async function handleError(_eventData, apiResponse) {
       )
     : rawMessage;
 
-  dispatch(STATE_ACTION.REQUEST_FAILED, { message });
+  dispatch(STATE_ACTION.REQUEST_FAILED, {
+    message,
+    game: apiResponse.game_state?.turn
+      ? apiResponse.game_state
+      : null,
+  });
 }
 
 const API_PROTOCOL_VERSION = 1;
@@ -583,6 +593,7 @@ export async function bank() {
       state.game?.current_player_id !== localPlayerId
     ) ||
     getTurnState() !== "WAITING_FOR_SELECTION" ||
+    state.game?.turn?.mandatory_hot_dice ||
     !state.ui.selectionIsValid ||
     scoringDice.length === 0
   ) {
@@ -707,7 +718,8 @@ export function toggleDieSelection(index) {
     value === null ||
     value === undefined ||
     state.ui.heldIndexes.has(index) ||
-    state.ui.rollioActive
+    state.ui.rollioActive ||
+    state.game?.turn?.mandatory_hot_dice
   ) {
     return;
   }

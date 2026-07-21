@@ -76,6 +76,19 @@ class Game:
 
             selected_score = 0
         elif self.turn.state == "WAITING_FOR_SELECTION":
+            if (
+                self.turn.mandatory_hot_dice
+                and Counter(scoring_dice)
+                != Counter(self.turn.rolled_dice)
+            ):
+                return {
+                    "success": False,
+                    "error": (
+                        "You must select all six hot dice "
+                        "and roll again."
+                    ),
+                }
+
             selection_result = self._apply_selection(
                 scoring_dice
             )
@@ -105,6 +118,14 @@ class Game:
 
         self.turn.roll_number += 1
         self.turn.state = "WAITING_FOR_SELECTION"
+
+        complete_roll_score = self.score_selection(
+            self.turn.rolled_dice
+        )
+        self.turn.mandatory_hot_dice = (
+            available_dice == 6
+            and complete_roll_score is not None
+        )
 
         roll_score = self.maximum_roll_score(
             self.turn.rolled_dice
@@ -205,6 +226,12 @@ class Game:
             return {
                 "success": False,
                 "error": "The turn is not ready to bank.",
+            }
+
+        if self.turn.mandatory_hot_dice:
+            return {
+                "success": False,
+                "error": "You must roll the hot dice.",
             }
 
         selection_result = self._apply_selection(
@@ -488,6 +515,7 @@ class Turn:
         self.rolled_dice = []
         self.base_score = 0
         self.state = "READY_TO_ROLL"
+        self.mandatory_hot_dice = False
 
     def getJSON(self):
         return {
@@ -496,4 +524,5 @@ class Turn:
             "rolled_dice": list(self.rolled_dice),
             "base_score": self.base_score,
             "state": self.state,
+            "mandatory_hot_dice": self.mandatory_hot_dice,
         }

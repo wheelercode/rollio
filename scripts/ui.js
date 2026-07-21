@@ -298,19 +298,57 @@ function renderScoreboard(state) {
 
 }
 
-function renderDiceTray(state) {
-  const turnState = getTurn(state.game).state;
-
+export function getGameControls(
+  state,
+  actingPlayerId = localPlayerId,
+) {
+  const turn = getTurn(state.game);
+  const turnState = turn.state;
+  const idle = state.ui.phase === UI_PHASE.IDLE;
   const localTurn =
-    localPlayerId === null ||
-    state.game?.current_player_id === localPlayerId;
+    actingPlayerId === null ||
+    state.game?.current_player_id === actingPlayerId;
 
-  const selectable =
-    state.ui.phase === UI_PHASE.IDLE &&
-    turnState === "WAITING_FOR_SELECTION" &&
+  const active =
+    state.ui.initialized &&
+    state.game !== null &&
+    idle &&
     !state.ui.rollioActive &&
     !state.ui.gameOverActive &&
     localTurn;
+
+  const mandatoryHotDice = Boolean(
+    turn.mandatory_hot_dice,
+  );
+  const firstRoll = active && turnState === "READY_TO_ROLL";
+  const validSelection =
+    active &&
+    turnState === "WAITING_FOR_SELECTION" &&
+    state.ui.selectionIsValid;
+  const turnScore =
+    (turn.base_score ?? 0) +
+    (state.ui.selectedScore ?? 0) +
+    (state.ui.submittedScore ?? 0);
+  const playerScore =
+    getCurrentPlayer(state.game)?.score ?? 0;
+  const meetsBankThreshold =
+    turnScore >= 1000 || playerScore >= 1000;
+
+  return {
+    diceSelectable:
+      active &&
+      turnState === "WAITING_FOR_SELECTION" &&
+      !mandatoryHotDice,
+    rollEnabled: firstRoll || validSelection,
+    bankEnabled:
+      validSelection &&
+      meetsBankThreshold &&
+      !mandatoryHotDice,
+  };
+}
+
+function renderDiceTray(state) {
+  const controls = getGameControls(state);
 
   for (let index = 0; index < dieSlots.length; index += 1) {
     const value = state.ui.trayValues[index];
@@ -322,48 +360,16 @@ function renderDiceTray(state) {
       held,
       rollio: state.ui.rollioActive,
       settled: settledIndexes.has(index),
-      disabled: !selectable || held,
+      disabled: !controls.diceSelectable || held,
     });
   }
 }
 
 function renderButtons(state) {
-  const turnState = getTurn(state.game).state;
-  const idle = state.ui.phase === UI_PHASE.IDLE;
+  const controls = getGameControls(state);
 
-  const localTurn =
-    localPlayerId === null ||
-    state.game?.current_player_id === localPlayerId;
-
-  const active =
-    state.ui.initialized &&
-    state.game !== null &&
-    idle &&
-    !state.ui.rollioActive &&
-    !state.ui.gameOverActive &&
-    localTurn;
-
-  const firstRoll = active && turnState === "READY_TO_ROLL";
-
-  const validSelection =
-    active &&
-    turnState === "WAITING_FOR_SELECTION" &&
-    state.ui.selectionIsValid;
-
-  const turnScore =
-    (getTurn(state.game).base_score ?? 0) +
-    (state.ui.selectedScore ?? 0) +
-    (state.ui.submittedScore ?? 0);
-
-  const playerScore =
-    getCurrentPlayer(state.game)?.score ?? 0;
-
-  const meetsBankThreshold =
-    turnScore >= 1000 || playerScore >= 1000;
-
-  elements.rollButton.disabled = !(firstRoll || validSelection);
-  elements.bankButton.disabled =
-    !(validSelection && meetsBankThreshold);
+  elements.rollButton.disabled = !controls.rollEnabled;
+  elements.bankButton.disabled = !controls.bankEnabled;
 }
 
 function randomDieValue(previousValue = null) {
