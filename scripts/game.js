@@ -5,7 +5,6 @@ import { scoreSelection } from "./scoring.js";
 import {
   dispatch,
   getOpenIndexes,
-  getSelectedDice,
   getState,
   STATE_ACTION,
   UI_PHASE,
@@ -123,7 +122,7 @@ function applySelectionState(selectedIndexes) {
     selectedIndexes,
   });
 
-  const selectedDice = getSelectedDice();
+  const selectedDice = ui.getSelectedDice(getState());
   const result = scoreSelection(selectedDice);
   const valid = selectedDice.length > 0 && result.valid;
 
@@ -436,7 +435,7 @@ export async function roll() {
 
   const gameId = state.game?.game_id;
   const turnState = getTurnState();
-  const scoringDice = getSelectedDice();
+  const scoringDice = ui.getSelectedDice(state);
   const selectedIndexes = [...state.ui.selectedIndexes];
 
   if (!gameId) {
@@ -500,7 +499,7 @@ export async function roll() {
 
 export async function bank() {
   const state = getState();
-  const scoringDice = getSelectedDice();
+  const scoringDice = ui.getSelectedDice(state);
 
   if (
     state.ui.phase !== UI_PHASE.IDLE ||
@@ -596,12 +595,12 @@ export function toggleDieSelection(index) {
     return;
   }
 
-  const previousResult = scoreSelection(getSelectedDice());
+  const previousResult = scoreSelection(ui.getSelectedDice(state));
   const previousSelectionScore = previousResult.score;
 
   dispatch(STATE_ACTION.DIE_SELECTION_TOGGLED, { index });
 
-  const selectedDice = getSelectedDice();
+  const selectedDice = ui.getSelectedDice(getState());
   const result = scoreSelection(selectedDice);
   const valid = selectedDice.length > 0 && result.valid;
   const nextSelectionScore = result.score;

@@ -330,13 +330,3 @@ export function getOpenIndexes() {
   return getOpenTrayIndexes();
 }
 
-export function getSelectedDice() {
-  return [...state.ui.selectedIndexes]
-    .sort((left, right) => left - right)
-    .map((index) => state.ui.trayValues[index])
-    .filter(
-      (value) =>
-        value !== null &&
-        value !== undefined,
-    );
-}

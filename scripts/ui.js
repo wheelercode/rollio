@@ -173,7 +173,7 @@ function getTurn(game) {
   return game?.turn && typeof game.turn === "object" ? game.turn : {};
 }
 
-function getSelectedValues(state) {
+export function getSelectedDice(state) {
   return [...state.ui.selectedIndexes]
     .sort((left, right) => left - right)
     .map((index) => state.ui.trayValues[index])
@@ -264,7 +264,7 @@ function renderScoreboard(state) {
   elements.scoredDice.textContent =
     scoredDice.length > 0 ? scoredDice.join(", ") : "None";
 
-  const selectedDice = getSelectedValues(state);
+  const selectedDice = getSelectedDice(state);
   elements.selectedDice.textContent =
     selectedDice.length > 0 ? selectedDice.join(", ") : "None";
 }
