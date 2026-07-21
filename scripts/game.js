@@ -10,6 +10,11 @@ import {
 } from "./state.js";
 import * as ui from "./ui.js";
 import { delay, getPlayerById } from "./utils.js";
+import {
+  connectWebSocket,
+  initializeWebSocket,
+  sendCommand,
+} from "./websockets.js";
 
 let rollAnimationPromise = null;
 
@@ -42,7 +47,7 @@ function setMessage(message) {
   dispatch(STATE_ACTION.MESSAGE_SET, { message });
 }
 
-function handleGameStarted(_eventData, apiResponse) {
+async function handleGameStarted(_eventData, apiResponse) {
   dispatch(STATE_ACTION.GAME_STARTED, {
     game: apiResponse.game_state,
   });
@@ -53,6 +58,16 @@ function handleGameStarted(_eventData, apiResponse) {
   );
 
   const playerName = currentPlayer?.name ?? "Player 1";
+  const gameId = apiResponse.game_state?.game_id;
+
+  if (!gameId) {
+    throw new Error("The server started a game without returning a game ID.");
+  }
+
+  setMessage("Connecting to the game...");
+  render();
+
+  await connectWebSocket({ gameId });
 
   setMessage(`${playerName}, press Roll to begin.`);
 }
@@ -181,7 +196,6 @@ function validateApiResponse(apiResponse) {
 }
 
 async function handleApiResponse(apiResponse) {
-  
   validateApiResponse(apiResponse);
 
   dispatch(STATE_ACTION.API_RESPONSE_RECEIVED, { apiResponse });
@@ -277,8 +291,7 @@ export async function roll() {
   rollAnimationPromise = ui.animateRoll(openIndexes);
 
   try {
-    await callApi("/game/roll", {
-      game_id: gameId,
+    sendCommand("ROLL", {
       scoring_dice: scoringDice,
     });
   } catch (error) {
@@ -323,8 +336,7 @@ export async function bank() {
   render();
 
   try {
-    await callApi("/game/bank", {
-      game_id: gameId,
+    sendCommand("BANK", {
       scoring_dice: scoringDice,
     });
   } catch (error) {
@@ -385,7 +397,7 @@ export async function initialize() {
   });
 
   initializeApi(handleApiResponse);
-
+  initializeWebSocket(handleApiResponse);
   render();
 
   try {
