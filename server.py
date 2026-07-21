@@ -20,11 +20,14 @@ GAME_CLEANUP_INTERVAL = 10
 class GameCommand(str, Enum):
     ROLL = "ROLL"
     BANK = "BANK"
+    SELECT_DICE = "SELECT_DICE"
 
 
 class GameEvent(str, Enum):
     GAME_WAITING = "GAME_WAITING"
     GAME_STARTED = "GAME_STARTED"
+    ROLL_STARTED = "ROLL_STARTED"
+    DICE_SELECTION_CHANGED = "DICE_SELECTION_CHANGED"
     DICE_ROLLED = "DICE_ROLLED"
     SCORE_BANKED = "SCORE_BANKED"
     ERROR = "ERROR"
@@ -61,6 +64,11 @@ class BankCommandData(BaseModel):
 
 class RollCommandData(BaseModel):
     scoring_dice: list[int] = Field(default_factory=list)
+    selected_indexes: list[int] = Field(default_factory=list)
+
+
+class SelectDiceCommandData(BaseModel):
+    selected_indexes: list[int] = Field(default_factory=list)
 
 
 class ConnectionManager:
@@ -345,6 +353,33 @@ def handle_bank_command(
     )
 
 
+def handle_select_dice_command(
+    game: Game,
+    player_id: str,
+    command_data: dict[str, Any],
+) -> ApiResponse:
+    request = SelectDiceCommandData.model_validate(command_data)
+    selected_indexes = request.selected_indexes
+
+    if (
+        len(selected_indexes) != len(set(selected_indexes))
+        or any(index < 0 or index >= 6 for index in selected_indexes)
+    ):
+        return invalid_request_response(
+            "Selected die indexes must be unique values from 0 through 5."
+        )
+
+    return game_response(
+        game,
+        GameEvent.DICE_SELECTION_CHANGED,
+        {"success": True},
+        {
+            "player_id": player_id,
+            "selected_indexes": selected_indexes,
+        },
+    )
+
+
 command_handlers = {
     GameCommand.ROLL: handle_roll_command,
     GameCommand.BANK: handle_bank_command,
@@ -494,13 +529,21 @@ async def game_websocket(
                     )
                 else:
                     games_manager.touch(game_id)
-                    handler = command_handlers[
-                        api_request.command
-                    ]
-                    response = handler(
-                        game,
-                        api_request.command_data,
-                    )
+
+                    if api_request.command == GameCommand.SELECT_DICE:
+                        response = handle_select_dice_command(
+                            game,
+                            api_request.player_id,
+                            api_request.command_data,
+                        )
+                    else:
+                        handler = command_handlers[
+                            api_request.command
+                        ]
+                        response = handler(
+                            game,
+                            api_request.command_data,
+                        )
 
             except ValidationError as error:
                 response = invalid_request_response(str(error))
@@ -509,6 +552,29 @@ async def game_websocket(
                     response,
                 )
                 continue
+
+            if (
+                api_request.command == GameCommand.ROLL
+                and response.game_event == GameEvent.DICE_ROLLED
+            ):
+                roll_request = RollCommandData.model_validate(
+                    api_request.command_data
+                )
+
+                await connection_manager.broadcast(
+                    game_id,
+                    game_response(
+                        game,
+                        GameEvent.ROLL_STARTED,
+                        {"success": True},
+                        {
+                            "player_id": api_request.player_id,
+                            "selected_indexes": (
+                                roll_request.selected_indexes
+                            ),
+                        },
+                    ),
+                )
 
             await connection_manager.broadcast(
                 game_id,

@@ -4,6 +4,7 @@ const DEFAULT_WEBSOCKET_URL =
 
 let socket = null;
 let responseHandler = null;
+let messageQueue = Promise.resolve();
 
 export function initializeWebSocket(webSocketResponseHandler) {
   if (typeof webSocketResponseHandler !== "function") {
@@ -86,20 +87,22 @@ export function connectWebSocket({
       resolve();
     });
 
-    currentSocket.addEventListener("message", async (event) => {
-      try {
-        const text =
-          typeof event.data === "string"
-            ? event.data
-            : await event.data.text();
+    currentSocket.addEventListener("message", (event) => {
+      messageQueue = messageQueue
+        .then(async () => {
+          const text =
+            typeof event.data === "string"
+              ? event.data
+              : await event.data.text();
 
-        await handleServerMessage(JSON.parse(text));
-      } catch (error) {
-        console.error(
-          "Could not process WebSocket message:",
-          error,
-        );
-      }
+          await handleServerMessage(JSON.parse(text));
+        })
+        .catch((error) => {
+          console.error(
+            "Could not process WebSocket message:",
+            error,
+          );
+        });
     });
 
     currentSocket.addEventListener("error", () => {

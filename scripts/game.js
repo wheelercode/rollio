@@ -27,6 +27,8 @@ let localPlayerId = null;
 const apiResponseHandlers = Object.freeze({
   GAME_WAITING: handleGameWaiting,
   GAME_STARTED: handleGameStarted,
+  ROLL_STARTED: handleRollStarted,
+  DICE_SELECTION_CHANGED: handleDiceSelectionChanged,
   DICE_ROLLED: handleDiceRolled,
   SCORE_BANKED: handleScoreBanked,
   ERROR: handleError,
@@ -110,10 +112,67 @@ async function handleGameStarted(eventData, apiResponse) {
   if (!isWebSocketConnected()) {
     await connectWebSocket({
       gameId,
-      });
+    });
   }
 
   setMessage(`${playerName}, press Roll to begin.`);
+}
+
+function applySelectionState(selectedIndexes) {
+  dispatch(STATE_ACTION.DICE_SELECTION_SYNCED, {
+    selectedIndexes,
+  });
+
+  const selectedDice = getSelectedDice();
+  const result = scoreSelection(selectedDice);
+  const valid = selectedDice.length > 0 && result.valid;
+
+  dispatch(STATE_ACTION.SELECTION_EVALUATED, {
+    valid,
+    score: result.score,
+  });
+
+  if (selectedDice.length === 0) {
+    setMessage("");
+  } else if (valid) {
+    setMessage(
+      result.groups
+        .map((group) => group.label)
+        .join(" • "),
+    );
+  } else {
+    setMessage("Every selected die must be part of a scoring group.");
+  }
+}
+
+function handleDiceSelectionChanged(eventData) {
+  const selectedIndexes = Array.isArray(eventData.selected_indexes)
+    ? eventData.selected_indexes
+    : [];
+
+  applySelectionState(selectedIndexes);
+}
+
+function handleRollStarted(eventData) {
+  if (
+    eventData.player_id === localPlayerId &&
+    rollAnimationPromise
+  ) {
+    return;
+  }
+
+  const selectedIndexes = Array.isArray(eventData.selected_indexes)
+    ? eventData.selected_indexes
+    : [];
+
+  dispatch(STATE_ACTION.ROLL_STARTED, {
+    selectedIndexes,
+    submittedScore: getState().ui.selectedScore,
+  });
+
+  const openIndexes = getOpenIndexes();
+  render();
+  rollAnimationPromise = ui.animateRoll(openIndexes);
 }
 
 async function handleDiceRolled(eventData, apiResponse) {
@@ -423,6 +482,7 @@ export async function roll() {
   try {
     sendCommand(localPlayerId, "ROLL", {
       scoring_dice: scoringDice,
+      selected_indexes: selectedIndexes,
     });
   } catch (error) {
     if (rollAnimationPromise) {
@@ -523,6 +583,10 @@ export function toggleDieSelection(index) {
 
   if (
     state.ui.phase !== UI_PHASE.IDLE ||
+    (
+      localPlayerId !== null &&
+      state.game?.current_player_id !== localPlayerId
+    ) ||
     getTurnState() !== "WAITING_FOR_SELECTION" ||
     value === null ||
     value === undefined ||
@@ -560,6 +624,15 @@ export function toggleDieSelection(index) {
   }
 
   render();
+
+  try {
+    sendCommand(localPlayerId, "SELECT_DICE", {
+      selected_indexes: [...getState().ui.selectedIndexes]
+        .sort((left, right) => left - right),
+    });
+  } catch (error) {
+    console.error("Could not synchronize dice selection:", error);
+  }
 
   const scoreDifference =
     nextSelectionScore - previousSelectionScore;

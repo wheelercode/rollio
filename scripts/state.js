@@ -21,6 +21,7 @@ export const STATE_ACTION = Object.freeze({
   ROLL_STARTED: "ROLL_STARTED",
   DICE_ROLLED: "DICE_ROLLED",
   DIE_SELECTION_TOGGLED: "DIE_SELECTION_TOGGLED",
+  DICE_SELECTION_SYNCED: "DICE_SELECTION_SYNCED",
   SELECTION_EVALUATED: "SELECTION_EVALUATED",
   BANK_STARTED: "BANK_STARTED",
   SCORE_BANKED: "SCORE_BANKED",
@@ -209,6 +210,10 @@ function handleDieSelectionToggled({ index }) {
   state.ui.selectedIndexes = nextSelection;
 }
 
+function handleDiceSelectionSynced({ selectedIndexes = [] }) {
+  state.ui.selectedIndexes = new Set(selectedIndexes);
+}
+
 function handleSelectionEvaluated({
   valid,
   score,
@@ -276,6 +281,9 @@ const stateActionHandlers = Object.freeze({
 
   [STATE_ACTION.DIE_SELECTION_TOGGLED]:
     handleDieSelectionToggled,
+
+  [STATE_ACTION.DICE_SELECTION_SYNCED]:
+    handleDiceSelectionSynced,
 
   [STATE_ACTION.SELECTION_EVALUATED]:
     handleSelectionEvaluated,
