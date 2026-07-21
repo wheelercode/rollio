@@ -1,5 +1,6 @@
-# ACTION REQUIRED
-
+import asyncio
+from contextlib import asynccontextmanager, suppress
+from datetime import timedelta
 from enum import Enum
 from typing import Any
 
@@ -8,7 +9,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 
 from game import Game, Player
-from games_manager import GamesManager
+from games_manager import GamesManager, utc_now
+
+
+GAME_IDLE_BEFORE_PING = timedelta(seconds=60)
+GAME_PING_TIMEOUT = timedelta(seconds=20)
+GAME_CLEANUP_INTERVAL = 10
 
 
 class GameCommand(str, Enum):
@@ -17,13 +23,20 @@ class GameCommand(str, Enum):
 
 
 class GameEvent(str, Enum):
+    GAME_WAITING = "GAME_WAITING"
     GAME_STARTED = "GAME_STARTED"
     DICE_ROLLED = "DICE_ROLLED"
     SCORE_BANKED = "SCORE_BANKED"
     ERROR = "ERROR"
 
 
+class OpponentType(str, Enum):
+    HUMAN = "human"
+    AI = "ai"
+
+
 class ApiRequest(BaseModel):
+    player_id: str
     command: GameCommand
     command_data: dict[str, Any] = Field(default_factory=dict)
 
@@ -36,13 +49,9 @@ class ApiResponse(BaseModel):
     game_state: dict[str, Any] = Field(default_factory=dict)
 
 
-class PlayerRequest(BaseModel):
-    name: str
-    type: str
-
-
 class StartRequest(BaseModel):
-    players: list[PlayerRequest] = Field(min_length=1)
+    player_name: str = Field(min_length=1, max_length=24)
+    opponent_type: OpponentType
 
 
 class BankCommandData(BaseModel):
@@ -63,11 +72,7 @@ class ConnectionManager:
         websocket: WebSocket,
     ) -> None:
         await websocket.accept()
-
-        if game_id not in self.connections:
-            self.connections[game_id] = set()
-
-        self.connections[game_id].add(websocket)
+        self.connections.setdefault(game_id, set()).add(websocket)
 
     def disconnect(
         self,
@@ -84,13 +89,27 @@ class ConnectionManager:
         if not game_connections:
             del self.connections[game_id]
 
+    def has_connections(self, game_id: str) -> bool:
+        return bool(self.connections.get(game_id))
+
     async def send_response(
         self,
         websocket: WebSocket,
         response: ApiResponse,
     ) -> None:
+        await websocket.send_json(response.model_dump(mode="json"))
+
+    async def send_transport(
+        self,
+        websocket: WebSocket,
+        transport: str,
+        transport_data: dict[str, Any] | None = None,
+    ) -> None:
         await websocket.send_json(
-            response.model_dump(mode="json")
+            {
+                "transport": transport,
+                "transport_data": transport_data or {},
+            }
         )
 
     async def broadcast(
@@ -98,10 +117,11 @@ class ConnectionManager:
         game_id: str,
         response: ApiResponse,
     ) -> None:
-        game_connections = self.connections.get(game_id, set())
         disconnected: list[WebSocket] = []
 
-        for websocket in list(game_connections):
+        for websocket in list(
+            self.connections.get(game_id, set())
+        ):
             try:
                 await self.send_response(websocket, response)
             except Exception:
@@ -110,8 +130,83 @@ class ConnectionManager:
         for websocket in disconnected:
             self.disconnect(game_id, websocket)
 
+    async def ping_game(self, game_id: str) -> None:
+        sent_at = utc_now().isoformat()
+        disconnected: list[WebSocket] = []
 
-app = FastAPI()
+        for websocket in list(
+            self.connections.get(game_id, set())
+        ):
+            try:
+                await self.send_transport(
+                    websocket,
+                    "PING",
+                    {"sent_at": sent_at},
+                )
+            except Exception:
+                disconnected.append(websocket)
+
+        for websocket in disconnected:
+            self.disconnect(game_id, websocket)
+
+    async def close_game(
+        self,
+        game_id: str,
+        reason: str,
+    ) -> None:
+        sockets = list(self.connections.get(game_id, set()))
+
+        for websocket in sockets:
+            with suppress(Exception):
+                await websocket.close(code=1000, reason=reason)
+
+        self.connections.pop(game_id, None)
+
+
+games_manager = GamesManager()
+connection_manager = ConnectionManager()
+
+
+async def cleanup_games() -> None:
+    while True:
+        await asyncio.sleep(GAME_CLEANUP_INTERVAL)
+        now = utc_now()
+
+        for game_id, managed in games_manager.iter_managed_games():
+            if managed.ping_sent_at is not None:
+                if now - managed.ping_sent_at >= GAME_PING_TIMEOUT:
+                    await connection_manager.close_game(
+                        game_id,
+                        "Game expired.",
+                    )
+                    games_manager.remove_game(game_id)
+                continue
+
+            if now - managed.last_activity < GAME_IDLE_BEFORE_PING:
+                continue
+
+            if not connection_manager.has_connections(game_id):
+                games_manager.remove_game(game_id)
+                continue
+
+            games_manager.mark_ping_sent(game_id)
+            await connection_manager.ping_game(game_id)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    cleanup_task = asyncio.create_task(cleanup_games())
+
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
+
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -124,10 +219,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-games_manager = GamesManager()
-connection_manager = ConnectionManager()
 
 
 def game_not_found_response(game_id: str) -> ApiResponse:
@@ -148,31 +239,19 @@ def normalize_event_data(
     game_event: GameEvent,
     result: dict[str, Any],
 ) -> dict[str, Any]:
-    if game_event == GameEvent.GAME_STARTED:
-        return {}
-
     if game_event == GameEvent.DICE_ROLLED:
         event_data = {
             "rollio": bool(result.get("rollio")),
-            "selected_score": result.get(
-                "held_score",
-                0,
-            ),
+            "selected_score": result.get("held_score", 0),
         }
 
         if event_data["rollio"]:
             event_data.update(
                 {
-                    "rolled_dice": result.get(
-                        "rolled_dice",
-                        [],
-                    ),
-                    "lost_score": result.get(
-                        "lost_score",
-                        0,
-                    ),
+                    "rolled_dice": result.get("rolled_dice", []),
+                    "lost_score": result.get("lost_score", 0),
                     "previous_player_id": result.get(
-                        "previous_player_id",
+                        "previous_player_id"
                     ),
                 }
             )
@@ -182,12 +261,11 @@ def normalize_event_data(
     if game_event == GameEvent.SCORE_BANKED:
         return {
             "previous_player_id": result.get(
-                "previous_player_id",
+                "previous_player_id"
             ),
-            "banked_score": result.get(
-                "banked_score",
-                0,
-            ),
+            "banked_score": result.get("banked_score", 0),
+            "game_over": bool(result.get("game_over")),
+            "winner_id": result.get("winner_id"),
         }
 
     return {}
@@ -197,6 +275,7 @@ def game_response(
     game: Game,
     game_event: GameEvent,
     result: dict[str, Any],
+    event_data: dict[str, Any] | None = None,
 ) -> ApiResponse:
     if result.get("success") is False:
         return ApiResponse(
@@ -210,9 +289,10 @@ def game_response(
 
     return ApiResponse(
         game_event=game_event,
-        event_data=normalize_event_data(
-            game_event,
-            result,
+        event_data=(
+            event_data
+            if event_data is not None
+            else normalize_event_data(game_event, result)
         ),
         game_state=game.getJSON(),
     )
@@ -236,11 +316,31 @@ def handle_bank_command(
     command_data: dict[str, Any],
 ) -> ApiResponse:
     request = BankCommandData.model_validate(command_data)
+    result = game.bank(request.scoring_dice)
+
+    if result.get("success"):
+        previous_player = next(
+            (
+                player
+                for player in game.players
+                if player.player_id
+                == result.get("previous_player_id")
+            ),
+            None,
+        )
+
+        if (
+            previous_player is not None
+            and previous_player.score >= game.target_score
+        ):
+            result["game_over"] = True
+            result["winner_id"] = previous_player.player_id
+            game.playing = False
 
     return game_response(
         game,
         GameEvent.SCORE_BANKED,
-        game.bank(request.scoring_dice),
+        result,
     )
 
 
@@ -250,22 +350,79 @@ command_handlers = {
 }
 
 
+def player_can_control_game(
+    game: Game,
+    player_id: str,
+) -> bool:
+    mode = games_manager.get_mode(game.game_id)
+
+    if mode == "ai":
+        return True
+
+    return (
+        game.current_player is not None
+        and game.current_player.player_id == player_id
+    )
+
+
 @app.post("/game/start", response_model=ApiResponse)
-def start_game(request: StartRequest):
-    game = games_manager.create_game()
+async def start_game(request: StartRequest):
+    player = Player(
+        request.player_name.strip() or "Player",
+        "human",
+    )
 
-    players = [
-        Player(player.name, player.type)
-        for player in request.players
-    ]
+    if request.opponent_type == OpponentType.AI:
+        game = games_manager.create_game("ai")
+        result = game.start_game(
+            [
+                player,
+                Player("Computer", "ai"),
+            ]
+        )
 
-    result = game.start_game(players)
+        return game_response(
+            game,
+            GameEvent.GAME_STARTED,
+            result,
+            {"player_id": player.player_id},
+        )
 
-    return game_response(
+    game, matched = games_manager.join_waiting_human_game(
+        player
+    )
+
+    if not matched:
+        return game_response(
+            game,
+            GameEvent.GAME_WAITING,
+            {"success": True},
+            {
+                "player_id": player.player_id,
+                "waiting_for_other_player": True,
+            },
+        )
+
+    response = game_response(
         game,
         GameEvent.GAME_STARTED,
-        result,
+        {"success": True},
+        {"player_id": player.player_id},
     )
+
+    # The first player is already connected and waiting.
+    # Do not send the second player's private local player ID.
+    await connection_manager.broadcast(
+        game.game_id,
+        game_response(
+            game,
+            GameEvent.GAME_STARTED,
+            {"success": True},
+            {},
+        ),
+    )
+
+    return response
 
 
 @app.websocket("/ws/game/{game_id}")
@@ -287,32 +444,54 @@ async def game_websocket(
         )
         return
 
-    await connection_manager.connect(
-        game_id,
-        websocket,
-    )
+    await connection_manager.connect(game_id, websocket)
+    games_manager.touch(game_id)
 
     try:
         while True:
             raw_message = await websocket.receive_json()
+
+            if raw_message.get("transport") == "PONG":
+                games_manager.touch(game_id)
+                continue
 
             try:
                 api_request = ApiRequest.model_validate(
                     raw_message
                 )
 
-                handler = command_handlers[api_request.command]
-
-                response = handler(
-                    game,
-                    api_request.command_data,
+                actor_exists = any(
+                    player.player_id == api_request.player_id
+                    for player in game.players
                 )
+
+                if not actor_exists:
+                    response = invalid_request_response(
+                        "Player does not belong to this game."
+                    )
+                elif not game.playing:
+                    response = invalid_request_response(
+                        "The game is waiting for another player."
+                    )
+                elif not player_can_control_game(
+                    game,
+                    api_request.player_id,
+                ):
+                    response = invalid_request_response(
+                        "It is not your turn."
+                    )
+                else:
+                    games_manager.touch(game_id)
+                    handler = command_handlers[
+                        api_request.command
+                    ]
+                    response = handler(
+                        game,
+                        api_request.command_data,
+                    )
 
             except ValidationError as error:
-                response = invalid_request_response(
-                    str(error)
-                )
-
+                response = invalid_request_response(str(error))
                 await connection_manager.send_response(
                     websocket,
                     response,
@@ -323,6 +502,17 @@ async def game_websocket(
                 game_id,
                 response,
             )
+
+            if (
+                response.game_event == GameEvent.SCORE_BANKED
+                and response.event_data.get("game_over")
+            ):
+                games_manager.remove_game(game_id)
+                await connection_manager.close_game(
+                    game_id,
+                    "Game finished.",
+                )
+                return
 
     except WebSocketDisconnect:
         connection_manager.disconnect(

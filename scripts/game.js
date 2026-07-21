@@ -16,13 +16,16 @@ import {
   connectWebSocket,
   initializeWebSocket,
   sendCommand,
+  isWebSocketConnected,
 } from "./websockets.js";
 
 let rollAnimationPromise = null;
 let bankAnimationPromise = null;
 let predictedBank = null;
+let localPlayerId = null;
 
 const apiResponseHandlers = Object.freeze({
+  GAME_WAITING: handleGameWaiting,
   GAME_STARTED: handleGameStarted,
   DICE_ROLLED: handleDiceRolled,
   SCORE_BANKED: handleScoreBanked,
@@ -53,7 +56,37 @@ function setMessage(message) {
   dispatch(STATE_ACTION.MESSAGE_SET, { message });
 }
 
-async function handleGameStarted(_eventData, apiResponse) {
+async function handleGameWaiting(eventData, apiResponse) {
+  localPlayerId = eventData.player_id ?? localPlayerId;
+
+  if (!localPlayerId) {
+    throw new Error(
+      "The server did not identify the waiting player.",
+    );
+  }
+
+  ui.setLocalPlayerId(localPlayerId);
+  ui.showMatchmakingStatus(
+    "Waiting for another human player to join...",
+  );
+
+  await connectWebSocket({
+    gameId: apiResponse.game_state?.game_id,
+  });
+}
+
+async function handleGameStarted(eventData, apiResponse) {
+  localPlayerId = eventData.player_id ?? localPlayerId;
+
+  if (!localPlayerId) {
+    throw new Error(
+      "The server did not identify the local player.",
+    );
+  }
+
+  ui.setLocalPlayerId(localPlayerId);
+  ui.showMatchmakingStatus("");
+
   dispatch(STATE_ACTION.GAME_STARTED, {
     game: apiResponse.game_state,
   });
@@ -73,7 +106,11 @@ async function handleGameStarted(_eventData, apiResponse) {
   setMessage("Connecting to the game...");
   render();
 
-  await connectWebSocket({ gameId });
+  if (!isWebSocketConnected()) {
+    await connectWebSocket({
+      gameId,
+      });
+  }
 
   setMessage(`${playerName}, press Roll to begin.`);
 }
@@ -105,11 +142,16 @@ async function handleDiceRolled(eventData, apiResponse) {
     );
   }
 
+  const newlyRolledIndexes = getOpenIndexes();
+
   dispatch(STATE_ACTION.DICE_ROLLED, {
     game: apiResponse.game_state,
     rolledDice,
     rollio: Boolean(eventData.rollio),
   });
+
+  render();
+  await ui.showSettledBorders(newlyRolledIndexes);
 
   if (eventData.rollio) {
     const previousPlayer = getPlayerById(
@@ -200,6 +242,14 @@ async function handleScoreBanked(eventData, apiResponse) {
   const previousName = previousPlayer?.name ?? "The player";
   const currentName = currentPlayer?.name ?? "the next player";
 
+  if (eventData.game_over) {
+    setMessage(
+      `${previousName} banked ` +
+        `${eventData.banked_score} points and won the game!`,
+    );
+    return;
+  }
+
   setMessage(
     `${previousName} banked ` +
       `${eventData.banked_score} points. ` +
@@ -274,19 +324,21 @@ export async function startGame() {
   try {
     const playerName = ui.readPlayerName().trim() || "Player 1";
 
+    const opponentType = ui.readOpponentType();
+
+    ui.showMatchmakingStatus(
+      opponentType === "human"
+        ? "Looking for an available human game..."
+        : "Starting a game against the computer...",
+    );
+
     await callApi("/game/start", {
-      players: [
-        {
-          name: playerName,
-          type: "human",
-        },
-        {
-          name: "Computer",
-          type: "ai",
-        },
-      ],
+      player_name: playerName,
+      opponent_type: opponentType,
     });
   } catch (error) {
+    ui.showMatchmakingStatus("");
+
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: error.message,
     });
@@ -298,7 +350,13 @@ export async function startGame() {
 export async function roll() {
   const state = getState();
 
-  if (state.ui.phase !== UI_PHASE.IDLE) {
+  if (
+    state.ui.phase !== UI_PHASE.IDLE ||
+    (
+      localPlayerId !== null &&
+      state.game?.current_player_id !== localPlayerId
+    )
+  ) {
     return;
   }
 
@@ -348,7 +406,7 @@ export async function roll() {
   rollAnimationPromise = ui.animateRoll(openIndexes);
 
   try {
-    sendCommand("ROLL", {
+    sendCommand(localPlayerId, "ROLL", {
       scoring_dice: scoringDice,
     });
   } catch (error) {
@@ -371,6 +429,10 @@ export async function bank() {
 
   if (
     state.ui.phase !== UI_PHASE.IDLE ||
+    (
+      localPlayerId !== null &&
+      state.game?.current_player_id !== localPlayerId
+    ) ||
     getTurnState() !== "WAITING_FOR_SELECTION" ||
     !state.ui.selectionIsValid ||
     scoringDice.length === 0
@@ -410,6 +472,7 @@ export async function bank() {
     bankedScore,
     fromPlayerScore,
     toPlayerScore,
+    playerId: currentPlayer?.player_id ?? null,
   };
 
   dispatch(STATE_ACTION.BANK_STARTED);
@@ -420,7 +483,7 @@ export async function bank() {
   );
 
   try {
-    sendCommand("BANK", {
+    sendCommand(localPlayerId, "BANK", {
       scoring_dice: scoringDice,
     });
   } catch (error) {

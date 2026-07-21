@@ -1,5 +1,3 @@
-// ACTION REQUIRED
-
 const DEFAULT_WEBSOCKET_URL =
   `${window.location.protocol === "https:" ? "wss:" : "ws:"}` +
   `//${window.location.hostname}:8000`;
@@ -7,10 +5,6 @@ const DEFAULT_WEBSOCKET_URL =
 let socket = null;
 let responseHandler = null;
 
-
-/**
- * Register the handler for server ApiResponse messages.
- */
 export function initializeWebSocket(webSocketResponseHandler) {
   if (typeof webSocketResponseHandler !== "function") {
     throw new TypeError(
@@ -21,16 +15,26 @@ export function initializeWebSocket(webSocketResponseHandler) {
   responseHandler = webSocketResponseHandler;
 }
 
+function sendMessage(message) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    throw new Error("The gameplay WebSocket is not connected.");
+  }
 
-/**
- * Handle a transport-level message.
- */
+  socket.send(JSON.stringify(message));
+}
+
+function sendTransportMessage(transport, transportData = {}) {
+  sendMessage({
+    transport,
+    transport_data: transportData,
+  });
+}
+
 function handleTransportMessage(message) {
   if (message.transport === "PING") {
     sendTransportMessage("PONG", {
       sent_at: message.transport_data?.sent_at ?? null,
     });
-
     return;
   }
 
@@ -39,10 +43,6 @@ function handleTransportMessage(message) {
   );
 }
 
-
-/**
- * Process one message received from the server.
- */
 async function handleServerMessage(message) {
   if (
     message &&
@@ -57,10 +57,6 @@ async function handleServerMessage(message) {
   await responseHandler(message);
 }
 
-
-/**
- * Open a WebSocket connection for one existing game.
- */
 export function connectWebSocket({
   gameId,
   websocketUrl = DEFAULT_WEBSOCKET_URL,
@@ -70,11 +66,9 @@ export function connectWebSocket({
   }
 
   if (!gameId) {
-    throw new Error("connectWebSocket requires a gameId.");
-  }
-
-  if (!websocketUrl) {
-    throw new Error("connectWebSocket requires a websocketUrl.");
+    throw new Error(
+      "connectWebSocket requires gameId.",
+    );
   }
 
   disconnectWebSocket();
@@ -85,7 +79,6 @@ export function connectWebSocket({
   return new Promise((resolve, reject) => {
     const currentSocket = new WebSocket(connectionUrl);
     socket = currentSocket;
-
     let connectionSettled = false;
 
     currentSocket.addEventListener("open", () => {
@@ -100,9 +93,7 @@ export function connectWebSocket({
             ? event.data
             : await event.data.text();
 
-        const serverMessage = JSON.parse(text);
-
-        await handleServerMessage(serverMessage);
+        await handleServerMessage(JSON.parse(text));
       } catch (error) {
         console.error(
           "Could not process WebSocket message:",
@@ -114,7 +105,6 @@ export function connectWebSocket({
     currentSocket.addEventListener("error", () => {
       if (!connectionSettled) {
         connectionSettled = true;
-
         reject(
           new Error(
             "Unable to establish the WebSocket connection.",
@@ -130,7 +120,6 @@ export function connectWebSocket({
 
       if (!connectionSettled) {
         connectionSettled = true;
-
         reject(
           new Error(
             `WebSocket closed before connecting. Code: ${event.code}`,
@@ -141,60 +130,24 @@ export function connectWebSocket({
   });
 }
 
-
-/**
- * Send one gameplay command.
- */
-export function sendCommand(command, commandData = {}) {
-  if (!command || typeof command !== "string") {
-    throw new TypeError("sendCommand requires a command string.");
-  }
-
-  if (
-    !commandData ||
-    typeof commandData !== "object" ||
-    Array.isArray(commandData)
-  ) {
-    throw new TypeError(
-      "sendCommand requires commandData to be an object.",
+export function sendCommand(
+  playerId,
+  command,
+  commandData = {},
+) {
+  if (!playerId) {
+    throw new Error(
+      "sendCommand requires the acting player ID.",
     );
   }
 
   sendMessage({
+    player_id: playerId,
     command,
     command_data: commandData,
   });
 }
 
-
-/**
- * Send one transport-level message.
- */
-function sendTransportMessage(transport, transportData = {}) {
-  sendMessage({
-    transport,
-    transport_data: transportData,
-  });
-}
-
-
-/**
- * Serialize and send one message over the active socket.
- */
-function sendMessage(message) {
-  if (!socket || socket.readyState !== WebSocket.OPEN) {
-    throw new Error("The gameplay WebSocket is not connected.");
-  }
-
-  const serializedMessage = JSON.stringify(message);
-  
-  socket.send(serializedMessage);
-}
-
-
-/**
- * Close the active gameplay WebSocket.
- */
 export function disconnectWebSocket() {
   const currentSocket = socket;
   socket = null;
@@ -210,10 +163,6 @@ export function disconnectWebSocket() {
   }
 }
 
-
-/**
- * Report whether gameplay commands can currently be sent.
- */
 export function isWebSocketConnected() {
   return socket?.readyState === WebSocket.OPEN;
 }

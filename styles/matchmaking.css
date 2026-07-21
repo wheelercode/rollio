@@ -1,0 +1,73 @@
+.game-mode-picker {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.game-mode-picker legend {
+  margin-bottom: 10px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.game-mode-option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: var(--radius-medium);
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.045);
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    transform 140ms ease;
+}
+
+.game-mode-option:hover {
+  transform: translateY(-1px);
+  border-color: rgba(244, 185, 66, 0.42);
+}
+
+.game-mode-option:has(input:checked) {
+  border-color: rgba(255, 224, 122, 0.78);
+  background: rgba(244, 185, 66, 0.1);
+}
+
+.game-mode-option input {
+  accent-color: var(--accent);
+}
+
+.game-mode-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.game-mode-option strong {
+  color: var(--text-primary);
+}
+
+.game-mode-option small {
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.matchmaking-status {
+  margin: 0;
+  color: var(--accent-light);
+  line-height: 1.5;
+}
+
+.welcome-form--waiting .player-name-input,
+.welcome-form--waiting .game-mode-picker,
+.welcome-form--waiting .primary-button {
+  pointer-events: none;
+  opacity: 0.55;
+}

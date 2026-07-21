@@ -1,7 +1,7 @@
 // ACTION REQUIRED
 
 import { SCREEN, UI_PHASE } from "./state.js";
-import { delay, getCurrentPlayer } from "./utils.js";
+import { delay } from "./utils.js";
 
 const DIE_FACE_URLS = Object.freeze({
   1: "assets/die-1.svg",
@@ -18,18 +18,24 @@ const ROLL_DURATION_DELTA = 350;
 const START_FACE_INTERVAL = 45;
 const MIN_END_FACE_INTERVAL = 260;
 const MAX_END_FACE_INTERVAL = 420;
+const DIE_SETTLE_BORDER_DELAY = 140;
 
 const SCORE_APPEAR_DURATION = 220;
 const SCORE_HOLD_DURATION = 650;
 const SCORE_TRAVEL_DURATION = 260;
 const SCORE_COUNT_DURATION = 360;
-const BANK_TRANSFER_DURATION = 520;
-const BANK_COUNT_DURATION = 420;
+const BANK_STEP_DELAYS = Object.freeze({
+  1000: 45,
+  100: 30,
+  10: 18,
+  1: 10,
+});
 
 let elements = null;
 let dieSlots = [];
 let settledIndexes = new Set();
 let scoreAnimationSequence = 0;
+let localPlayerId = null;
 
 const diceFaceCache = (() => {
   const images = new Map();
@@ -205,13 +211,42 @@ function renderDiceStamps(state) {
 function renderScoreboard(state) {
   const game = state.game;
   const turn = getTurn(game);
-  const currentPlayer = getCurrentPlayer(game);
-  const opponent = findOpponent(game, game?.current_player_id);
+  const players = Array.isArray(game?.players)
+    ? game.players
+    : [];
 
-  elements.playerNameDisplay.textContent = currentPlayer?.name ?? "Player 1";
-  elements.playerScore.textContent = currentPlayer?.score ?? 0;
-  elements.opponentNameDisplay.textContent = opponent?.name ?? "Opponent";
-  elements.opponentScore.textContent = opponent?.score ?? 0;
+  const leftPlayer = players[0] ?? null;
+  const rightPlayer = players[1] ?? null;
+  const currentPlayerId = game?.current_player_id ?? null;
+
+  elements.playerNameDisplay.textContent =
+    leftPlayer?.name ?? "Player 1";
+  elements.playerScore.textContent =
+    leftPlayer?.score ?? 0;
+
+  elements.opponentNameDisplay.textContent =
+    rightPlayer?.name ?? "Player 2";
+  elements.opponentScore.textContent =
+    rightPlayer?.score ?? 0;
+
+  elements.leftPlayerLabel.textContent = "Player 1";
+  elements.rightPlayerLabel.textContent = "Player 2";
+
+  elements.leftPlayerCard.dataset.playerId =
+    leftPlayer?.player_id ?? "";
+  elements.rightPlayerCard.dataset.playerId =
+    rightPlayer?.player_id ?? "";
+
+  elements.leftPlayerCard.classList.toggle(
+    "player-score-card--active",
+    leftPlayer?.player_id === currentPlayerId,
+  );
+
+  elements.rightPlayerCard.classList.toggle(
+    "player-score-card--active",
+    rightPlayer?.player_id === currentPlayerId,
+  );
+
   elements.targetScore.textContent = game?.target_score ?? 0;
 
   const authoritativeTurnScore = turn.base_score ?? 0;
@@ -237,10 +272,15 @@ function renderScoreboard(state) {
 function renderDiceTray(state) {
   const turnState = getTurn(state.game).state;
 
+  const localTurn =
+    localPlayerId === null ||
+    state.game?.current_player_id === localPlayerId;
+
   const selectable =
     state.ui.phase === UI_PHASE.IDLE &&
     turnState === "WAITING_FOR_SELECTION" &&
-    !state.ui.rollioActive;
+    !state.ui.rollioActive &&
+    localTurn;
 
   for (let index = 0; index < dieSlots.length; index += 1) {
     const value = state.ui.trayValues[index];
@@ -261,11 +301,16 @@ function renderButtons(state) {
   const turnState = getTurn(state.game).state;
   const idle = state.ui.phase === UI_PHASE.IDLE;
 
+  const localTurn =
+    localPlayerId === null ||
+    state.game?.current_player_id === localPlayerId;
+
   const active =
     state.ui.initialized &&
     state.game !== null &&
     idle &&
-    !state.ui.rollioActive;
+    !state.ui.rollioActive &&
+    localTurn;
 
   const firstRoll = active && turnState === "READY_TO_ROLL";
 
@@ -321,12 +366,47 @@ export function initialize({ onStart, onRoll, onBank, onDieSelected }) {
     bankButton: document.getElementById("bankButton"),
     output: document.getElementById("output"),
     rolledDice: document.getElementById("rolledDice"),
+    matchmakingStatus:
+      document.getElementById("matchmakingStatus"),
+    opponentTypes: Array.from(
+      document.querySelectorAll(
+        'input[name="opponentType"]',
+      ),
+    ),
   };
 
   for (const [name, element] of Object.entries(elements)) {
+    if (name === "opponentTypes") {
+      continue;
+    }
+
     if (!element) {
       throw new Error(`Required DOM element was not found: ${name}`);
     }
+  }
+
+  elements.leftPlayerCard =
+    elements.playerNameDisplay.closest(".player-score-card");
+  elements.rightPlayerCard =
+    elements.opponentNameDisplay.closest(".player-score-card");
+
+  elements.leftPlayerLabel =
+    elements.leftPlayerCard?.querySelector(
+      ".player-score-card__label",
+    );
+
+  elements.rightPlayerLabel =
+    elements.rightPlayerCard?.querySelector(
+      ".player-score-card__label",
+    );
+
+  if (
+    !elements.leftPlayerCard ||
+    !elements.rightPlayerCard ||
+    !elements.leftPlayerLabel ||
+    !elements.rightPlayerLabel
+  ) {
+    throw new Error("Player scoreboard cards were not found.");
   }
 
   elements.scoreEffects = createScoreEffectsLayer();
@@ -352,6 +432,31 @@ export function readPlayerName() {
   requireInitialized();
   return elements.playerName.value;
 }
+
+export function readOpponentType() {
+  requireInitialized();
+
+  return (
+    elements.opponentTypes.find((input) => input.checked)?.value
+    ?? "human"
+  );
+}
+
+export function setLocalPlayerId(playerId) {
+  localPlayerId = playerId ?? null;
+}
+
+export function showMatchmakingStatus(message) {
+  requireInitialized();
+
+  const waiting = Boolean(message);
+  const form = elements.startButton.closest(".welcome-form");
+
+  elements.matchmakingStatus.hidden = !waiting;
+  elements.matchmakingStatus.textContent = message ?? "";
+  form?.classList.toggle("welcome-form--waiting", waiting);
+}
+
 
 export function render(state) {
   requireInitialized();
@@ -655,139 +760,81 @@ export function animateScoringFeedback({
   }
 }
 
-function animateElementScore(
-  element,
-  fromScore,
-  toScore,
-  duration,
-  sequence,
-) {
-  return new Promise((resolve) => {
-    const startTime = performance.now();
-    const difference = toScore - fromScore;
-
-    function update(now) {
-      if (sequence !== scoreAnimationSequence) {
-        resolve();
-        return;
-      }
-
-      const progress = Math.min(
-        (now - startTime) / duration,
-        1,
-      );
-
-      const easedProgress =
-        1 - Math.pow(1 - progress, 3);
-
-      element.textContent = Math.round(
-        fromScore + difference * easedProgress,
-      );
-
-      if (progress < 1) {
-        requestAnimationFrame(update);
-      } else {
-        element.textContent = toScore;
-        resolve();
-      }
-    }
-
-    element.textContent = fromScore;
-    requestAnimationFrame(update);
-  });
+function getBankTransferStep(remaining) {
+  if (remaining >= 1000) return 1000;
+  if (remaining >= 100) return 100;
+  if (remaining >= 10) return 10;
+  return 1;
 }
 
-function getBankScoreCenters() {
-  const turnRect = elements.turnScore.getBoundingClientRect();
-  const playerRect = elements.playerScore.getBoundingClientRect();
+function getPlayerScoreElement(playerId) {
+  if (
+    elements.leftPlayerCard.dataset.playerId ===
+    String(playerId)
+  ) {
+    return elements.playerScore;
+  }
 
-  return {
-    turnScore: {
-      x: turnRect.left + turnRect.width / 2,
-      y: turnRect.top + turnRect.height / 2,
-    },
-    playerScore: {
-      x: playerRect.left + playerRect.width / 2,
-      y: playerRect.top + playerRect.height / 2,
-    },
-  };
+  if (
+    elements.rightPlayerCard.dataset.playerId ===
+    String(playerId)
+  ) {
+    return elements.opponentScore;
+  }
+
+  return null;
 }
 
 export async function animateBankTransfer({
   bankedScore,
   fromPlayerScore,
   toPlayerScore,
+  playerId,
 }) {
   requireInitialized();
 
-  scoreAnimationSequence += 1;
-  const sequence = scoreAnimationSequence;
-  const centers = getBankScoreCenters();
+  const playerScoreElement =
+    getPlayerScoreElement(playerId);
 
-  const label = createFloatingScore(
-    bankedScore,
-    [{ tone: "combination" }],
-  );
-
-  const value = label.querySelector(".score-float__value");
-
-  if (value) {
-    value.textContent = String(bankedScore);
+  if (!playerScoreElement) {
+    throw new Error(
+      "The banking player's score display was not found.",
+    );
   }
 
-  placeFloatingScore(label, centers.turnScore);
+  scoreAnimationSequence += 1;
+  const sequence = scoreAnimationSequence;
 
-  const deltaX =
-    centers.playerScore.x - centers.turnScore.x;
-  const deltaY =
-    centers.playerScore.y - centers.turnScore.y;
+  let remaining = Math.max(0, bankedScore);
+  let displayedTurnScore = remaining;
+  let displayedPlayerScore = fromPlayerScore;
 
-  const drainPromise = animateElementScore(
-    elements.turnScore,
-    bankedScore,
-    0,
-    BANK_TRANSFER_DURATION,
-    sequence,
-  );
+  elements.turnScore.textContent = displayedTurnScore;
+  playerScoreElement.textContent = displayedPlayerScore;
 
-  const travel = label.animate(
-    [
-      {
-        transform: "translate(-50%, -50%) scale(1)",
-        opacity: 1,
-      },
-      {
-        transform:
-          `translate(calc(-50% + ${deltaX}px), ` +
-          `calc(-50% + ${deltaY}px)) scale(0.68)`,
-        opacity: 0.85,
-      },
-    ],
-    {
-      duration: BANK_TRANSFER_DURATION,
-      easing: "cubic-bezier(0.35, 0, 0.2, 1)",
-      fill: "forwards",
-    },
-  );
+  while (remaining > 0) {
+    if (sequence !== scoreAnimationSequence) {
+      return;
+    }
 
-  await Promise.all([
-    drainPromise,
-    travel.finished.catch(() => {}),
-  ]);
+    const step = getBankTransferStep(remaining);
 
-  label.remove();
+    remaining -= step;
+    displayedTurnScore -= step;
+    displayedPlayerScore += step;
+
+    elements.turnScore.textContent = displayedTurnScore;
+    playerScoreElement.textContent = displayedPlayerScore;
+
+    await delay(BANK_STEP_DELAYS[step]);
+  }
 
   if (sequence !== scoreAnimationSequence) {
     return;
   }
 
-  await animateElementScore(
-    elements.playerScore,
-    fromPlayerScore,
-    toPlayerScore,
-    BANK_COUNT_DURATION,
-    sequence,
-  );
+  elements.turnScore.textContent = 0;
+  playerScoreElement.textContent = toPlayerScore;
 }
 
 export function animateRoll(
@@ -872,8 +919,18 @@ async function animateDie(index, profile) {
     );
   }
 
-  settledIndexes.add(index);
-  slot.setState("settled");
+  slot.setState("filled");
+}
+
+export async function showSettledBorders(indexes) {
+  requireInitialized();
+
+  await delay(DIE_SETTLE_BORDER_DELAY);
+
+  for (const index of indexes) {
+    settledIndexes.add(index);
+    dieSlots[index].setState("settled");
+  }
 }
 
 function interpolate(start, end, amount) {
