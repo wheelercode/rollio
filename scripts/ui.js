@@ -333,9 +333,16 @@ function randomDieValue(previousValue = null) {
   return value;
 }
 
-export function initialize({ onStart, onRoll, onBank, onDieSelected }) {
+export function initialize({
+  onStart,
+  onGameTypeSelected,
+  onRoll,
+  onBank,
+  onDieSelected,
+}) {
   const handlers = {
     onStart,
+    onGameTypeSelected,
     onRoll,
     onBank,
     onDieSelected,
@@ -368,15 +375,15 @@ export function initialize({ onStart, onRoll, onBank, onDieSelected }) {
     rolledDice: document.getElementById("rolledDice"),
     matchmakingStatus:
       document.getElementById("matchmakingStatus"),
-    opponentTypes: Array.from(
-      document.querySelectorAll(
-        'input[name="opponentType"]',
-      ),
+    gameTypeDialog:
+      document.getElementById("gameTypeDialog"),
+    gameTypeButtons: Array.from(
+      document.querySelectorAll("[data-game-type]"),
     ),
   };
 
   for (const [name, element] of Object.entries(elements)) {
-    if (name === "opponentTypes") {
+    if (name === "gameTypeButtons") {
       continue;
     }
 
@@ -420,6 +427,13 @@ export function initialize({ onStart, onRoll, onBank, onDieSelected }) {
   elements.hotDiceStamp = createStamp("dice-stamp--hot", "HOT DICE!");
 
   elements.startButton.addEventListener("click", onStart);
+
+  for (const button of elements.gameTypeButtons) {
+    button.addEventListener("click", () => {
+      onGameTypeSelected(button.dataset.gameType);
+    });
+  }
+
   elements.rollButton.addEventListener("click", onRoll);
   elements.bankButton.addEventListener("click", onBank);
 }
@@ -433,28 +447,44 @@ export function readPlayerName() {
   return elements.playerName.value;
 }
 
-export function readOpponentType() {
-  requireInitialized();
-
-  return (
-    elements.opponentTypes.find((input) => input.checked)?.value
-    ?? "human"
-  );
-}
-
 export function setLocalPlayerId(playerId) {
   localPlayerId = playerId ?? null;
+}
+
+export function openGameTypeDialog() {
+  requireInitialized();
+
+  elements.matchmakingStatus.hidden = true;
+  elements.matchmakingStatus.textContent = "";
+
+  for (const button of elements.gameTypeButtons) {
+    button.disabled = false;
+  }
+
+  if (!elements.gameTypeDialog.open) {
+    elements.gameTypeDialog.showModal();
+  }
+}
+
+export function closeGameTypeDialog() {
+  requireInitialized();
+
+  if (elements.gameTypeDialog.open) {
+    elements.gameTypeDialog.close();
+  }
 }
 
 export function showMatchmakingStatus(message) {
   requireInitialized();
 
-  const waiting = Boolean(message);
-  const form = elements.startButton.closest(".welcome-form");
+  const active = Boolean(message);
 
-  elements.matchmakingStatus.hidden = !waiting;
+  elements.matchmakingStatus.hidden = !active;
   elements.matchmakingStatus.textContent = message ?? "";
-  form?.classList.toggle("welcome-form--waiting", waiting);
+
+  for (const button of elements.gameTypeButtons) {
+    button.disabled = active;
+  }
 }
 
 

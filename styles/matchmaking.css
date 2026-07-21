@@ -1,73 +1,70 @@
-.game-mode-picker {
-  display: grid;
-  gap: 10px;
-  margin: 0;
+.game-type-dialog {
+  width: min(calc(100% - 32px), 460px);
   padding: 0;
-  border: 0;
-}
-
-.game-mode-picker legend {
-  margin-bottom: 10px;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.game-mode-option {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 13px;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: var(--radius-medium);
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.045);
-  transition:
-    border-color 140ms ease,
-    background 140ms ease,
-    transform 140ms ease;
-}
-
-.game-mode-option:hover {
-  transform: translateY(-1px);
-  border-color: rgba(244, 185, 66, 0.42);
-}
-
-.game-mode-option:has(input:checked) {
-  border-color: rgba(255, 224, 122, 0.78);
-  background: rgba(244, 185, 66, 0.1);
-}
-
-.game-mode-option input {
-  accent-color: var(--accent);
-}
-
-.game-mode-option span {
-  display: grid;
-  gap: 3px;
-}
-
-.game-mode-option strong {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
   color: var(--text-primary);
+  background:
+    linear-gradient(
+      145deg,
+      rgba(15, 40, 51, 0.99),
+      rgba(7, 22, 31, 0.99)
+    );
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
 }
 
-.game-mode-option small {
-  color: var(--text-muted);
-  line-height: 1.35;
+.game-type-dialog::backdrop {
+  background: rgba(2, 8, 12, 0.74);
+  backdrop-filter: blur(5px);
+}
+
+.game-type-dialog__content {
+  display: grid;
+  gap: 24px;
+  padding: 30px;
+}
+
+.game-type-dialog h2 {
+  margin: 0;
+  text-align: center;
+  font-size: 1.45rem;
+}
+
+.game-type-dialog__actions {
+  display: grid;
+  gap: 12px;
+}
+
+.game-type-button {
+  min-height: 58px;
+  padding: 0 22px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 14px;
+  cursor: pointer;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 1rem;
+  font-weight: 800;
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+.game-type-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: rgba(255, 224, 122, 0.72);
+  background: rgba(244, 185, 66, 0.14);
+}
+
+.game-type-button:disabled {
+  cursor: wait;
+  opacity: 0.45;
 }
 
 .matchmaking-status {
   margin: 0;
   color: var(--accent-light);
+  text-align: center;
   line-height: 1.5;
-}
-
-.welcome-form--waiting .player-name-input,
-.welcome-form--waiting .game-mode-picker,
-.welcome-form--waiting .primary-button {
-  pointer-events: none;
-  opacity: 0.55;
 }

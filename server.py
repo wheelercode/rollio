@@ -31,6 +31,7 @@ class GameEvent(str, Enum):
 
 
 class OpponentType(str, Enum):
+    SINGLE = "single"
     HUMAN = "human"
     AI = "ai"
 
@@ -371,6 +372,17 @@ async def start_game(request: StartRequest):
         request.player_name.strip() or "Player",
         "human",
     )
+
+    if request.opponent_type == OpponentType.SINGLE:
+        game = games_manager.create_game("single")
+        result = game.start_game([player])
+
+        return game_response(
+            game,
+            GameEvent.GAME_STARTED,
+            result,
+            {"player_id": player.player_id},
+        )
 
     if request.opponent_type == OpponentType.AI:
         game = games_manager.create_game("ai")

@@ -16,6 +16,7 @@ export const STATE_ACTION = Object.freeze({
   RESET: "RESET",
   CLIENT_INITIALIZED: "CLIENT_INITIALIZED",
   API_RESPONSE_RECEIVED: "API_RESPONSE_RECEIVED",
+  GAME_ROOM_ENTERED: "GAME_ROOM_ENTERED",
   GAME_STARTED: "GAME_STARTED",
   ROLL_STARTED: "ROLL_STARTED",
   DICE_ROLLED: "DICE_ROLLED",
@@ -128,6 +129,12 @@ function handleClientInitialized() {
 
 function handleApiResponseReceived({ apiResponse }) {
   state.ui.lastApiResponse = apiResponse;
+}
+
+function handleGameRoomEntered() {
+  state.ui.screen = SCREEN.PLAY;
+  state.ui.phase = UI_PHASE.IDLE;
+  state.ui.message = "Select a game type to begin.";
 }
 
 function handleGameStarted({ game }) {
@@ -254,6 +261,9 @@ const stateActionHandlers = Object.freeze({
 
   [STATE_ACTION.API_RESPONSE_RECEIVED]:
     handleApiResponseReceived,
+
+  [STATE_ACTION.GAME_ROOM_ENTERED]:
+    handleGameRoomEntered,
 
   [STATE_ACTION.GAME_STARTED]:
     handleGameStarted,

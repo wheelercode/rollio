@@ -50,43 +50,12 @@
             >
           </label>
 
-          <fieldset class="game-mode-picker">
-            <legend>Choose an opponent</legend>
-
-            <label class="game-mode-option">
-              <input
-                type="radio"
-                name="opponentType"
-                value="human"
-                checked
-              >
-              <span>
-                <strong>Vs Human</strong>
-                <small>Join a waiting player or host a new game.</small>
-              </span>
-            </label>
-
-            <label class="game-mode-option">
-              <input
-                type="radio"
-                name="opponentType"
-                value="ai"
-              >
-              <span>
-                <strong>Vs Computer</strong>
-                <small>Start immediately against the computer.</small>
-              </span>
-            </label>
-          </fieldset>
-
-          <p id="matchmakingStatus" class="matchmaking-status" hidden></p>
-
           <button
             id="startButton"
             class="primary-button"
             type="button"
           >
-            Find Game
+            Start Game
           </button>
         </div>
 
@@ -107,6 +76,30 @@
 
   <section id="gameSection" class="screen" hidden>
     <div class="game-board">
+      <dialog
+        id="gameTypeDialog"
+        class="game-type-dialog"
+        aria-labelledby="gameTypeTitle"
+      >
+        <div class="game-type-dialog__content">
+          <h2 id="gameTypeTitle">Select Game Type:</h2>
+
+          <div class="game-type-dialog__actions">
+            <button class="game-type-button" type="button" data-game-type="single">
+              Single Player
+            </button>
+            <button class="game-type-button" type="button" data-game-type="human">
+              vs Human
+            </button>
+            <button class="game-type-button" type="button" data-game-type="ai">
+              vs Computer
+            </button>
+          </div>
+
+          <p id="matchmakingStatus" class="matchmaking-status" hidden></p>
+        </div>
+      </dialog>
+
       <header class="game-scoreboard">
         <section class="player-score-card player-score-card--current">
           <span class="player-score-card__label">Player 1</span>

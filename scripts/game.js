@@ -86,6 +86,7 @@ async function handleGameStarted(eventData, apiResponse) {
 
   ui.setLocalPlayerId(localPlayerId);
   ui.showMatchmakingStatus("");
+  ui.closeGameTypeDialog();
 
   dispatch(STATE_ACTION.GAME_STARTED, {
     game: apiResponse.game_state,
@@ -317,24 +318,38 @@ async function handleApiResponse(apiResponse) {
   render();
 }
 
-export async function startGame() {
-  setMessage("");
+export function startGame() {
+  const playerName = ui.readPlayerName().trim() || "Player 1";
+
+  sessionStorage.setItem("rollioPlayerName", playerName);
+
+  dispatch(STATE_ACTION.GAME_ROOM_ENTERED);
   render();
+  ui.openGameTypeDialog();
+}
+
+export async function selectGameType(gameType) {
+  if (!["single", "human", "ai"].includes(gameType)) {
+    return;
+  }
+
+  const playerName =
+    sessionStorage.getItem("rollioPlayerName") ||
+    ui.readPlayerName().trim() ||
+    "Player 1";
 
   try {
-    const playerName = ui.readPlayerName().trim() || "Player 1";
+    const statusMessages = {
+      single: "Starting single-player game...",
+      human: "Looking for an available human game...",
+      ai: "Starting a game against the computer...",
+    };
 
-    const opponentType = ui.readOpponentType();
-
-    ui.showMatchmakingStatus(
-      opponentType === "human"
-        ? "Looking for an available human game..."
-        : "Starting a game against the computer...",
-    );
+    ui.showMatchmakingStatus(statusMessages[gameType]);
 
     await callApi("/game/start", {
       player_name: playerName,
-      opponent_type: opponentType,
+      opponent_type: gameType,
     });
   } catch (error) {
     ui.showMatchmakingStatus("");
@@ -569,6 +584,7 @@ export async function initialize() {
 
   ui.initialize({
     onStart: startGame,
+    onGameTypeSelected: selectGameType,
     onRoll: roll,
     onBank: bank,
     onDieSelected: toggleDieSelection,
