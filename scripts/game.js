@@ -1,3 +1,5 @@
+// ACTION REQUIRED
+
 import { callApi, initializeApi } from "./http.js";
 import { scoreSelection } from "./scoring.js";
 import {
@@ -25,6 +27,8 @@ const apiResponseHandlers = Object.freeze({
   ERROR: handleError,
 });
 
+const ROLLIO_SLOT_DELAY = 300;
+const ROLLIO_STAMP_DELAY = 150;
 const ROLLIO_DISPLAY_DURATION = 3000;
 
 function render() {
@@ -84,6 +88,21 @@ async function handleDiceRolled(eventData, apiResponse) {
     throw new Error("The server did not return rolled dice.");
   }
 
+  const predictedSelectedScore = getState().ui.submittedScore;
+  const serverSelectedScore = eventData.selected_score ?? 0;
+
+  if (predictedSelectedScore !== serverSelectedScore) {
+    console.warn(
+      "Client/server selection score mismatch:",
+      {
+        predictedSelectedScore,
+        serverSelectedScore,
+        difference:
+          serverSelectedScore - predictedSelectedScore,
+      },
+    );
+  }
+
   dispatch(STATE_ACTION.DICE_ROLLED, {
     game: apiResponse.game_state,
     rolledDice,
@@ -102,7 +121,6 @@ async function handleDiceRolled(eventData, apiResponse) {
     );
 
     const previousName = previousPlayer?.name ?? "The player";
-
     const currentName = currentPlayer?.name ?? "the next player";
 
     setMessage(
@@ -111,6 +129,16 @@ async function handleDiceRolled(eventData, apiResponse) {
         `It is now ${currentName}'s turn.`,
     );
 
+    render();
+
+    await delay(ROLLIO_SLOT_DELAY);
+
+    dispatch(STATE_ACTION.ROLLIO_ACTIVATED);
+    render();
+
+    await delay(ROLLIO_STAMP_DELAY);
+
+    dispatch(STATE_ACTION.ROLLIO_STAMP_SHOWN);
     render();
 
     await delay(ROLLIO_DISPLAY_DURATION);
@@ -141,7 +169,6 @@ function handleScoreBanked(eventData, apiResponse) {
   );
 
   const previousName = previousPlayer?.name ?? "The player";
-
   const currentName = currentPlayer?.name ?? "the next player";
 
   setMessage(
@@ -273,6 +300,7 @@ export async function roll() {
 
   dispatch(STATE_ACTION.ROLL_STARTED, {
     selectedIndexes,
+    submittedScore: state.ui.selectedScore,
   });
 
   const openIndexes = getOpenIndexes();

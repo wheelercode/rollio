@@ -25,6 +25,8 @@ export const STATE_ACTION = Object.freeze({
   SCORE_BANKED: "SCORE_BANKED",
   REQUEST_FAILED: "REQUEST_FAILED",
   MESSAGE_SET: "MESSAGE_SET",
+  ROLLIO_ACTIVATED: "ROLLIO_ACTIVATED",
+  ROLLIO_STAMP_SHOWN: "ROLLIO_STAMP_SHOWN",
   ROLLIO_CLEARED: "ROLLIO_CLEARED",
 });
 
@@ -43,7 +45,9 @@ function createInitialState() {
       selectedIndexes: new Set(),
       selectionIsValid: false,
       selectedScore: 0,
+      submittedScore: 0,
       rollioActive: false,
+      rollioStampVisible: false,
       hotDiceActive: false,
       message: "",
       lastApiResponse: null,
@@ -71,7 +75,9 @@ function resetTray() {
   state.ui.trayValues = Array(DICE_COUNT).fill(null);
   state.ui.heldIndexes = new Set();
   state.ui.rollioActive = false;
+  state.ui.rollioStampVisible = false;
   state.ui.hotDiceActive = false;
+  state.ui.submittedScore = 0;
 
   clearSelection();
 }
@@ -134,9 +140,11 @@ function handleGameStarted({ game }) {
 
 function handleRollStarted({
   selectedIndexes = [],
+  submittedScore = 0,
 } = {}) {
   state.ui.phase = UI_PHASE.ROLLING;
   state.ui.message = "Rolling...";
+  state.ui.submittedScore = submittedScore;
 
   if (state.ui.rollioActive) {
     resetTray();
@@ -172,7 +180,9 @@ function handleDiceRolled({
     ? UI_PHASE.SUBMITTING
     : UI_PHASE.IDLE;
 
-  state.ui.rollioActive = rollio;
+  state.ui.submittedScore = 0;
+  state.ui.rollioActive = false;
+  state.ui.rollioStampVisible = false;
   state.ui.hotDiceActive = false;
 
   clearSelection();
@@ -212,18 +222,27 @@ function handleScoreBanked({ game }) {
   resetTray();
 }
 
-function handleRollioCleared() {
-  resetTray();
-  state.ui.phase = UI_PHASE.IDLE;
-}
-
 function handleRequestFailed({ message }) {
   state.ui.phase = UI_PHASE.IDLE;
+  state.ui.submittedScore = 0;
   state.ui.message = message ?? "Request failed.";
 }
 
 function handleMessageSet({ message = "" }) {
   state.ui.message = message;
+}
+
+function handleRollioActivated() {
+  state.ui.rollioActive = true;
+}
+
+function handleRollioStampShown() {
+  state.ui.rollioStampVisible = true;
+}
+
+function handleRollioCleared() {
+  resetTray();
+  state.ui.phase = UI_PHASE.IDLE;
 }
 
 const stateActionHandlers = Object.freeze({
@@ -262,6 +281,12 @@ const stateActionHandlers = Object.freeze({
 
   [STATE_ACTION.MESSAGE_SET]:
     handleMessageSet,
+
+  [STATE_ACTION.ROLLIO_ACTIVATED]:
+    handleRollioActivated,
+
+  [STATE_ACTION.ROLLIO_STAMP_SHOWN]:
+    handleRollioStampShown,
 
   [STATE_ACTION.ROLLIO_CLEARED]:
     handleRollioCleared,

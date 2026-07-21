@@ -1,3 +1,5 @@
+// ACTION REQUIRED
+
 import { SCREEN, UI_PHASE } from "./state.js";
 import { delay, getCurrentPlayer } from "./utils.js";
 
@@ -183,7 +185,7 @@ function createStamp(className, text) {
 }
 
 function renderDiceStamps(state) {
-  elements.rollioStamp.hidden = !state.ui.rollioActive;
+  elements.rollioStamp.hidden = !state.ui.rollioStampVisible;
 
   elements.hotDiceStamp.hidden = !state.ui.hotDiceActive;
 }
@@ -199,7 +201,13 @@ function renderScoreboard(state) {
   elements.opponentNameDisplay.textContent = opponent?.name ?? "Opponent";
   elements.opponentScore.textContent = opponent?.score ?? 0;
   elements.targetScore.textContent = game?.target_score ?? 0;
-  elements.turnScore.textContent = turn.base_score ?? 0;
+
+  const authoritativeTurnScore = turn.base_score ?? 0;
+  const submittedScore = state.ui.submittedScore ?? 0;
+
+  elements.turnScore.textContent =
+    authoritativeTurnScore + submittedScore;
+
   elements.rollNumber.textContent = turn.roll_number ?? 0;
 
   const scoredDice = Array.isArray(turn.scored_dice) ? turn.scored_dice : [];
@@ -232,8 +240,6 @@ function renderDiceTray(state) {
       disabled: !selectable || held,
     });
   }
-
-  elements.rollioStamp.hidden = !state.ui.rollioActive;
 }
 
 function renderButtons(state) {

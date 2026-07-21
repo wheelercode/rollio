@@ -1,3 +1,5 @@
+# ACTION REQUIRED
+
 from enum import Enum
 from typing import Any
 
@@ -34,10 +36,6 @@ class ApiResponse(BaseModel):
     game_state: dict[str, Any] = Field(default_factory=dict)
 
 
-class GameRequest(BaseModel):
-    game_id: str
-
-
 class PlayerRequest(BaseModel):
     name: str
     type: str
@@ -45,14 +43,6 @@ class PlayerRequest(BaseModel):
 
 class StartRequest(BaseModel):
     players: list[PlayerRequest] = Field(min_length=1)
-
-
-class BankRequest(GameRequest):
-    scoring_dice: list[int]
-
-
-class RollRequest(GameRequest):
-    scoring_dice: list[int] = Field(default_factory=list)
 
 
 class BankCommandData(BaseModel):
@@ -164,6 +154,10 @@ def normalize_event_data(
     if game_event == GameEvent.DICE_ROLLED:
         event_data = {
             "rollio": bool(result.get("rollio")),
+            "selected_score": result.get(
+                "held_score",
+                0,
+            ),
         }
 
         if event_data["rollio"]:
@@ -272,6 +266,7 @@ def start_game(request: StartRequest):
         GameEvent.GAME_STARTED,
         result,
     )
+
 
 @app.websocket("/ws/game/{game_id}")
 async def game_websocket(
