@@ -217,15 +217,71 @@ class Game:
         previous_player = self.current_player
         banked_score = self.turn.base_score
 
-        previous_player.score += banked_score
+        if (
+            previous_player.score < 1000
+            and banked_score < 1000
+        ):
+            return {
+                "success": False,
+                "error": (
+                    "You need a turn score of 1,000 or more "
+                    "before you can bank for the first time."
+                ),
+            }
 
-        self._next_turn()
+        final_score = previous_player.score + banked_score
+        game_won = final_score == self.target_score
+
+        if (
+            game_won
+            and self.maximum_roll_score(
+                self.turn.rolled_dice
+            ) > 0
+        ):
+            return {
+                "success": False,
+                "error": (
+                    "You must use every scoring die to win "
+                    f"with an exact {self.target_score:,} "
+                    "finish."
+                ),
+            }
+
+        previous_player.score = final_score
+
+        if game_won:
+            self.playing = False
+        else:
+            self._next_turn()
 
         return {
             "success": True,
             "banked_score": banked_score,
             "previous_player_id": (
                 previous_player.player_id
+            ),
+            "game_won": game_won,
+        }
+
+    def restart(self):
+        if self.playing:
+            return {
+                "success": False,
+                "error": "The game is still in progress.",
+            }
+
+        for player in self.players:
+            player.score = 0
+            player.turn_number = 0
+
+        self.current_player = self.players[0]
+        self.playing = True
+        self.turn = Turn()
+
+        return {
+            "success": True,
+            "current_player_id": (
+                self.current_player.player_id
             ),
         }
 

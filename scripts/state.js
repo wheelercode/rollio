@@ -27,6 +27,10 @@ export const STATE_ACTION = Object.freeze({
   ROLLIO_ACTIVATED: "ROLLIO_ACTIVATED",
   ROLLIO_STAMP_SHOWN: "ROLLIO_STAMP_SHOWN",
   ROLLIO_CLEARED: "ROLLIO_CLEARED",
+  TRAY_VALUES_CLEARED: "TRAY_VALUES_CLEARED",
+  GAME_WON: "GAME_WON",
+  WIN_CELEBRATION_SHOWN: "WIN_CELEBRATION_SHOWN",
+  PLAY_AGAIN_SHOWN: "PLAY_AGAIN_SHOWN",
 });
 
 const DICE_COUNT = 6;
@@ -49,6 +53,10 @@ function createInitialState() {
       rollioStampVisible: false,
       hotDiceActive: false,
       message: "",
+      gameOverActive: false,
+      winnerName: "",
+      winCelebrationVisible: false,
+      playAgainVisible: false,
     },
   };
 }
@@ -69,8 +77,7 @@ function clearSelection() {
   state.ui.selectedScore = 0;
 }
 
-function resetTray() {
-  state.ui.trayValues = Array(DICE_COUNT).fill(null);
+function resetTurnSelection() {
   state.ui.heldIndexes = new Set();
   state.ui.rollioActive = false;
   state.ui.rollioStampVisible = false;
@@ -78,6 +85,11 @@ function resetTray() {
   state.ui.submittedScore = 0;
 
   clearSelection();
+}
+
+function resetTray() {
+  state.ui.trayValues = Array(DICE_COUNT).fill(null);
+  resetTurnSelection();
 }
 
 function getOpenTrayIndexes() {
@@ -134,6 +146,10 @@ function handleGameStarted({ game }) {
   state.game = game;
   state.ui.screen = SCREEN.PLAY;
   state.ui.phase = UI_PHASE.IDLE;
+  state.ui.gameOverActive = false;
+  state.ui.winnerName = "";
+  state.ui.winCelebrationVisible = false;
+  state.ui.playAgainVisible = false;
 
   resetTray();
 }
@@ -223,7 +239,11 @@ function handleScoreBanked({ game }) {
   state.game = game;
   state.ui.phase = UI_PHASE.IDLE;
 
-  resetTray();
+  resetTurnSelection();
+}
+
+function handleTrayValuesCleared() {
+  state.ui.trayValues = Array(DICE_COUNT).fill(null);
 }
 
 function handleRequestFailed({ message }) {
@@ -247,6 +267,20 @@ function handleRollioStampShown() {
 function handleRollioCleared() {
   resetTray();
   state.ui.phase = UI_PHASE.IDLE;
+}
+
+function handleGameWon({ winnerName = "" }) {
+  state.ui.phase = UI_PHASE.IDLE;
+  state.ui.gameOverActive = true;
+  state.ui.winnerName = winnerName;
+}
+
+function handleWinCelebrationShown() {
+  state.ui.winCelebrationVisible = true;
+}
+
+function handlePlayAgainShown() {
+  state.ui.playAgainVisible = true;
 }
 
 const stateActionHandlers = Object.freeze({
@@ -297,6 +331,18 @@ const stateActionHandlers = Object.freeze({
 
   [STATE_ACTION.ROLLIO_CLEARED]:
     handleRollioCleared,
+
+  [STATE_ACTION.TRAY_VALUES_CLEARED]:
+    handleTrayValuesCleared,
+
+  [STATE_ACTION.GAME_WON]:
+    handleGameWon,
+
+  [STATE_ACTION.WIN_CELEBRATION_SHOWN]:
+    handleWinCelebrationShown,
+
+  [STATE_ACTION.PLAY_AGAIN_SHOWN]:
+    handlePlayAgainShown,
 });
 
 export function dispatch(type, payload = {}) {

@@ -3,8 +3,9 @@
   isolation: isolate;
   display: grid;
   min-height: 100vh;
+  min-height: 100svh;
   place-items: center;
-  padding: 32px;
+  padding: clamp(12px, 4vw, 32px);
 }
 
 #startSection::before {
@@ -62,24 +63,6 @@
   content: "";
   background: radial-gradient(circle at center, transparent 20%, rgba(3, 12, 18, 0.62) 100%);
   pointer-events: none;
-}
-
-.welcome-art__placeholder {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: grid;
-  width: min(72%, 350px);
-  aspect-ratio: 1;
-  place-items: center;
-  transform: translate(-50%, -54%);
-  border: 1px dashed rgba(255, 255, 255, 0.22);
-  border-radius: 50%;
-  color: rgba(255, 255, 255, 0.45);
-  text-align: center;
-  letter-spacing: 0.08em;
-  line-height: 1.6;
-  text-transform: uppercase;
 }
 
 .welcome-art__caption {
@@ -214,24 +197,31 @@
 .primary-button:active { transform: translateY(0); }
 
 @media (max-width: 800px) {
-  #startSection { padding: 20px; }
   .welcome-panel {
     width: min(100%, 540px);
     min-height: unset;
     grid-template-columns: 1fr;
   }
   .welcome-art {
-    min-height: 270px;
-    padding: 26px;
+    min-height: clamp(64px, 16vh, 160px);
+    padding: clamp(10px, 3vh, 26px);
   }
   .welcome-art__caption { display: none; }
-  .welcome-content { padding: 42px 30px 46px; }
-  .welcome-title { font-size: clamp(4rem, 20vw, 5.8rem); }
+  .welcome-content {
+    padding: clamp(14px, 4vh, 42px) clamp(16px, 5vw, 30px);
+  }
+  .brand-mark { margin-bottom: clamp(8px, 2vh, 30px); }
+  .welcome-title { font-size: clamp(2.1rem, 10vh, 3.6rem); }
+  .welcome-tagline {
+    margin: clamp(6px, 2vh, 22px) 0 clamp(10px, 3vh, 42px);
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .welcome-form { gap: clamp(8px, 2vh, 20px); }
+  .welcome-line { font-size: clamp(1rem, 4vw, 1.3rem); }
+  .primary-button { min-height: clamp(40px, 7vh, 52px); }
 }
 
 @media (max-width: 480px) {
-  #startSection { padding: 14px; }
-  .welcome-content { padding: 34px 23px 38px; }
-  .welcome-line { display: grid; }
-  .player-name-input { width: 100%; }
+  .player-name-input { flex: 1; }
 }

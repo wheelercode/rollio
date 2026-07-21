@@ -1,5 +1,5 @@
 import { SCREEN, UI_PHASE } from "./state.js";
-import { delay } from "./utils.js";
+import { delay, getCurrentPlayer } from "./utils.js";
 
 const DIE_FACE_URLS = Object.freeze({
   1: "assets/die-1.svg",
@@ -19,7 +19,7 @@ const MAX_END_FACE_INTERVAL = 420;
 const DIE_SETTLE_BORDER_DELAY = 140;
 
 const SCORE_APPEAR_DURATION = 220;
-const SCORE_HOLD_DURATION = 650;
+const SCORE_HOLD_DURATION = 350;
 const SCORE_TRAVEL_DURATION = 260;
 const SCORE_COUNT_DURATION = 360;
 const BANK_STEP_DELAYS = Object.freeze({
@@ -28,6 +28,19 @@ const BANK_STEP_DELAYS = Object.freeze({
   10: 18,
   1: 10,
 });
+
+const CONFETTI_COLORS = Object.freeze([
+  "#f4b942",
+  "#4ade80",
+  "#22d3ee",
+  "#c084fc",
+  "#f87171",
+  "#ffe07a",
+]);
+const CONFETTI_PIECE_COUNT = 70;
+const CONFETTI_MIN_DURATION = 2200;
+const CONFETTI_MAX_DURATION = 3600;
+const CONFETTI_MAX_DELAY = 400;
 
 let elements = null;
 let dieSlots = [];
@@ -201,9 +214,38 @@ function createScoreEffectsLayer() {
   return layer;
 }
 
+function createOverlayStamp(className) {
+  const stamp = document.createElement("div");
+  stamp.className = className;
+  stamp.setAttribute("aria-hidden", "true");
+  document.body.appendChild(stamp);
+  return stamp;
+}
+
+function createConfettiLayer() {
+  const layer = document.createElement("div");
+  layer.className = "confetti-layer";
+  layer.setAttribute("aria-hidden", "true");
+  document.body.appendChild(layer);
+  return layer;
+}
+
 function renderDiceStamps(state) {
   elements.rollioStamp.hidden = !state.ui.rollioStampVisible;
   elements.hotDiceStamp.hidden = !state.ui.hotDiceActive;
+}
+
+function renderGameOver(state) {
+  elements.winStamp.textContent = state.ui.winnerName
+    ? `${state.ui.winnerName} wins!`
+    : "";
+
+  elements.winStamp.classList.toggle(
+    "win-stamp--visible",
+    state.ui.winCelebrationVisible,
+  );
+
+  elements.playAgainButton.hidden = !state.ui.playAgainVisible;
 }
 
 function renderScoreboard(state) {
@@ -229,9 +271,6 @@ function renderScoreboard(state) {
     elements.opponentNameDisplay.textContent = rightPlayer.name ?? "Player 2";
     elements.opponentScore.textContent = rightPlayer.score ?? 0;
   }
-
-  elements.leftPlayerLabel.textContent = "Player 1";
-  elements.rightPlayerLabel.textContent = "Player 2";
 
   elements.leftPlayerCard.dataset.playerId =
     leftPlayer?.player_id ?? "";
@@ -270,6 +309,7 @@ function renderDiceTray(state) {
     state.ui.phase === UI_PHASE.IDLE &&
     turnState === "WAITING_FOR_SELECTION" &&
     !state.ui.rollioActive &&
+    !state.ui.gameOverActive &&
     localTurn;
 
   for (let index = 0; index < dieSlots.length; index += 1) {
@@ -300,6 +340,7 @@ function renderButtons(state) {
     state.game !== null &&
     idle &&
     !state.ui.rollioActive &&
+    !state.ui.gameOverActive &&
     localTurn;
 
   const firstRoll = active && turnState === "READY_TO_ROLL";
@@ -309,8 +350,20 @@ function renderButtons(state) {
     turnState === "WAITING_FOR_SELECTION" &&
     state.ui.selectionIsValid;
 
+  const turnScore =
+    (getTurn(state.game).base_score ?? 0) +
+    (state.ui.selectedScore ?? 0) +
+    (state.ui.submittedScore ?? 0);
+
+  const playerScore =
+    getCurrentPlayer(state.game)?.score ?? 0;
+
+  const meetsBankThreshold =
+    turnScore >= 1000 || playerScore >= 1000;
+
   elements.rollButton.disabled = !(firstRoll || validSelection);
-  elements.bankButton.disabled = !validSelection;
+  elements.bankButton.disabled =
+    !(validSelection && meetsBankThreshold);
 }
 
 function randomDieValue(previousValue = null) {
@@ -329,6 +382,7 @@ export function initialize({
   onRoll,
   onBank,
   onDieSelected,
+  onPlayAgain,
 }) {
   const handlers = {
     onStart,
@@ -336,6 +390,7 @@ export function initialize({
     onRoll,
     onBank,
     onDieSelected,
+    onPlayAgain,
   };
 
   for (const [name, handler] of Object.entries(handlers)) {
@@ -357,6 +412,7 @@ export function initialize({
     message: document.getElementById("message"),
     rollButton: document.getElementById("rollButton"),
     bankButton: document.getElementById("bankButton"),
+    playAgainButton: document.getElementById("playAgainButton"),
     rolledDice: document.getElementById("rolledDice"),
     matchmakingStatus:
       document.getElementById("matchmakingStatus"),
@@ -384,21 +440,9 @@ export function initialize({
   elements.scoreboard =
     elements.leftPlayerCard?.closest(".game-scoreboard");
 
-  elements.leftPlayerLabel =
-    elements.leftPlayerCard?.querySelector(
-      ".player-score-card__label",
-    );
-
-  elements.rightPlayerLabel =
-    elements.rightPlayerCard?.querySelector(
-      ".player-score-card__label",
-    );
-
   if (
     !elements.leftPlayerCard ||
     !elements.rightPlayerCard ||
-    !elements.leftPlayerLabel ||
-    !elements.rightPlayerLabel ||
     !elements.scoreboard
   ) {
     throw new Error("Player scoreboard cards were not found.");
@@ -414,6 +458,9 @@ export function initialize({
   elements.rollioStamp = createStamp("dice-stamp--rollio", "ROLLIO!");
   elements.hotDiceStamp = createStamp("dice-stamp--hot", "HOT DICE!");
 
+  elements.confettiLayer = createConfettiLayer();
+  elements.winStamp = createOverlayStamp("win-stamp");
+
   elements.startButton.addEventListener("click", onStart);
 
   for (const button of elements.gameTypeButtons) {
@@ -424,6 +471,7 @@ export function initialize({
 
   elements.rollButton.addEventListener("click", onRoll);
   elements.bankButton.addEventListener("click", onBank);
+  elements.playAgainButton.addEventListener("click", onPlayAgain);
 }
 
 export function preloadAssets() {
@@ -482,6 +530,7 @@ export function render(state) {
   renderScoreboard(state);
   renderDiceTray(state);
   renderDiceStamps(state);
+  renderGameOver(state);
   elements.message.textContent = state.ui.message;
   renderButtons(state);
 }
@@ -945,6 +994,42 @@ export async function showSettledBorders(indexes) {
   for (const index of indexes) {
     settledIndexes.add(index);
     dieSlots[index].setState("settled");
+  }
+}
+
+export function launchConfetti() {
+  requireInitialized();
+
+  for (let index = 0; index < CONFETTI_PIECE_COUNT; index += 1) {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+
+    const drift = randomBetween(-90, 90);
+    const rotation =
+      randomBetween(180, 720) * (Math.random() < 0.5 ? -1 : 1);
+    const duration = randomBetween(
+      CONFETTI_MIN_DURATION,
+      CONFETTI_MAX_DURATION,
+    );
+
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.setProperty("--confetti-drift", `${drift}px`);
+    piece.style.setProperty("--confetti-rotation", `${rotation}deg`);
+    piece.style.animationDuration = `${duration}ms`;
+    piece.style.animationDelay =
+      `${Math.random() * CONFETTI_MAX_DELAY}ms`;
+    piece.style.background =
+      CONFETTI_COLORS[
+        Math.floor(Math.random() * CONFETTI_COLORS.length)
+      ];
+
+    piece.addEventListener(
+      "animationend",
+      () => piece.remove(),
+      { once: true },
+    );
+
+    elements.confettiLayer.appendChild(piece);
   }
 }
 

@@ -1,8 +1,9 @@
 #gameSection {
   display: grid;
   min-height: 100vh;
+  min-height: 100svh;
   place-items: center;
-  padding: 32px;
+  padding: clamp(12px, 3vw, 32px);
   background:
     radial-gradient(circle at 50% 0%, rgba(34, 113, 111, 0.2), transparent 38%),
     linear-gradient(145deg, var(--background-deep), var(--background-mid));
@@ -14,8 +15,8 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 24px;
-  margin-bottom: 28px;
+  gap: clamp(8px, 2.5vw, 20px);
+  margin-bottom: clamp(8px, 2vw, 14px);
 }
 
 .game-scoreboard--solo {
@@ -24,30 +25,18 @@
 }
 
 .player-score-card {
-  display: grid;
-  gap: 5px;
+  display: flex;
+  align-items: baseline;
   min-width: 0;
-  padding: 18px 22px;
-  border: 1px solid var(--panel-border);
-  border-radius: var(--radius-medium);
-  background: var(--panel);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  gap: 0.4em;
 }
 
-.player-score-card--opponent { text-align: right; }
-
-.player-score-card__label,
-.turn-score span {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
+.player-score-card--opponent { justify-content: flex-end; }
 
 .player-score-card__name {
   overflow: hidden;
-  font-size: clamp(1.15rem, 2.5vw, 1.7rem);
+  font-size: clamp(0.8rem, 2vw, 1rem);
+  font-weight: 700;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -55,43 +44,49 @@
 
 .player-score-card__score {
   color: var(--accent-light);
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  font-size: clamp(0.95rem, 2.6vw, 1.3rem);
   font-weight: 900;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .turn-score {
   display: grid;
   place-items: center;
-  min-width: 210px;
-  padding: 18px 28px 22px;
+  min-width: 300px;
+  padding: clamp(6px, 1.6vw, 12px) clamp(14px, 3vw, 24px);
   border: 2px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
+  border-radius: 16px;
   background:
     radial-gradient(circle at 50% 15%, rgba(255, 255, 255, 0.16), transparent 65%),
     var(--panel);
   text-align: center;
   box-shadow:
-    0 18px 42px rgba(0, 0, 0, 0.3),
-    inset 0 0 24px rgba(255, 255, 255, 0.04);
+    0 10px 26px rgba(0, 0, 0, 0.3),
+    inset 0 0 16px rgba(255, 255, 255, 0.04);
 }
 
 .turn-score span {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 2px;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .turn-score strong {
   color: var(--accent-light);
-  font-size: clamp(3.2rem, 8vw, 5.4rem);
+  font-size: clamp(1.6rem, 6vw, 3rem);
   font-weight: 950;
   line-height: 0.95;
 }
 
 .dice-table {
-  padding: clamp(24px, 5vw, 44px);
+  padding: clamp(10px, 3vw, 44px);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 28px;
+  border-radius: 20px;
   background:
     radial-gradient(circle at 50% 4%, rgba(255, 255, 255, 0.14), transparent 40%),
     linear-gradient(145deg, var(--green-light), var(--green-dark));
@@ -101,29 +96,31 @@
 }
 
 .game-message {
-  min-height: 24px;
-  margin: 24px 0 0;
+  min-height: 1.3em;
+  margin: clamp(6px, 2vw, 20px) 0 0;
   color: var(--accent-light);
   text-align: center;
-  line-height: 1.5;
+  line-height: 1.4;
+  font-size: clamp(0.82rem, 2vw, 1rem);
 }
 
 .game-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(160px, 220px));
+  grid-template-columns: repeat(2, minmax(0, 220px));
   justify-content: center;
-  gap: 14px;
-  margin: 28px auto 0;
+  gap: clamp(8px, 2vw, 14px);
+  margin: clamp(8px, 2.5vw, 24px) auto 0;
 }
 
 .game-action {
-  min-width: 160px;
-  min-height: 56px;
-  padding: 0 24px;
+  min-width: 0;
+  min-height: clamp(40px, 8vw, 56px);
+  padding: 0 clamp(12px, 3vw, 24px);
   border-radius: 14px;
   cursor: pointer;
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.11);
+  font-size: clamp(0.8rem, 2vw, 1rem);
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -147,47 +144,20 @@
   opacity: 0.34;
 }
 
-@media (max-width: 800px) {
-  #gameSection { align-items: start; }
-  .game-scoreboard { grid-template-columns: 1fr 1fr; }
-  .game-scoreboard--solo { grid-template-columns: 1fr; }
-  .turn-score {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    width: 100%;
-  }
-  .game-actions { grid-template-columns: 1fr; }
-  .game-action { width: 100%; }
+@media (max-width: 480px) {
+  .game-scoreboard { gap: 6px; }
 }
 
 @media (max-width: 480px) {
-  #gameSection { padding: 14px; }
-  .game-scoreboard {
-    grid-template-columns: 1fr;
-    gap: 12px;
+  .turn-score {
+    min-width: 50px;
   }
-  .turn-score,
-  .player-score-card { grid-column: 1; }
-  .turn-score { grid-row: 1; }
-  .player-score-card--current { grid-row: 2; }
-  .player-score-card--opponent {
-    grid-row: 3;
-    text-align: left;
-  }
-  .dice-table { padding: 20px; }
 }
-
-.player-score-card--current {
-  border-color: rgba(255, 224, 122, 0.9);
-  background:
-    radial-gradient(circle at 20% 0%, rgba(255, 224, 122, 0.18), transparent 58%),
-    var(--panel);
-  box-shadow:
-    0 16px 38px rgba(0, 0, 0, 0.28),
-    0 0 0 2px rgba(255, 224, 122, 0.16),
-    0 0 28px rgba(255, 224, 122, 0.18);
-  transform: translateY(-3px);
+.play-again-button {
+  position: fixed;
+  z-index: 1002;
+  top: 64%;
+  left: 50%;
+  min-width: 200px;
+  transform: translate(-50%, 0);
 }
-
-.player-score-card--current .player-score-card__label { color: #ffe07a; }
-.player-score-card--current .player-score-card__name { color: #fff6d2; }

@@ -90,8 +90,7 @@
       </dialog>
 
       <header class="game-scoreboard">
-        <section class="player-score-card player-score-card--current">
-          <span class="player-score-card__label">Player 1</span>
+        <section class="player-score-card">
           <strong id="playerNameDisplay" class="player-score-card__name">Player 1</strong>
           <span id="playerScore" class="player-score-card__score">0</span>
         </section>
@@ -102,7 +101,6 @@
         </section>
 
         <section class="player-score-card player-score-card--opponent">
-          <span class="player-score-card__label">Player 2</span>
           <strong id="opponentNameDisplay" class="player-score-card__name">Player 2</strong>
           <span id="opponentScore" class="player-score-card__score">0</span>
         </section>
@@ -125,6 +123,15 @@
           <button id="bankButton" class="game-action game-action--bank" type="button" disabled>Bank</button>
         </div>
       </main>
+
+      <button
+        id="playAgainButton"
+        class="game-action game-action--primary play-again-button"
+        type="button"
+        hidden
+      >
+        Play Again
+      </button>
     </div>
   </section>
 

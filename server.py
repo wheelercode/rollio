@@ -21,6 +21,7 @@ class GameCommand(str, Enum):
     ROLL = "ROLL"
     BANK = "BANK"
     SELECT_DICE = "SELECT_DICE"
+    PLAY_AGAIN = "PLAY_AGAIN"
 
 
 class GameEvent(str, Enum):
@@ -327,28 +328,26 @@ def handle_bank_command(
     request = BankCommandData.model_validate(command_data)
     result = game.bank(request.scoring_dice)
 
-    if result.get("success"):
-        previous_player = next(
-            (
-                player
-                for player in game.players
-                if player.player_id
-                == result.get("previous_player_id")
-            ),
-            None,
-        )
-
-        if (
-            previous_player is not None
-            and previous_player.score >= game.target_score
-        ):
-            result["game_over"] = True
-            result["winner_id"] = previous_player.player_id
-            game.playing = False
+    if result.get("success") and result.get("game_won"):
+        result["game_over"] = True
+        result["winner_id"] = result.get("previous_player_id")
 
     return game_response(
         game,
         GameEvent.SCORE_BANKED,
+        result,
+    )
+
+
+def handle_play_again_command(
+    game: Game,
+    _command_data: dict[str, Any],
+) -> ApiResponse:
+    result = game.restart()
+
+    return game_response(
+        game,
+        GameEvent.GAME_STARTED,
         result,
     )
 
@@ -516,6 +515,12 @@ async def game_websocket(
                     response = invalid_request_response(
                         "Player does not belong to this game."
                     )
+                elif api_request.command == GameCommand.PLAY_AGAIN:
+                    games_manager.touch(game_id)
+                    response = handle_play_again_command(
+                        game,
+                        api_request.command_data,
+                    )
                 elif not game.playing:
                     response = invalid_request_response(
                         "The game is waiting for another player."
@@ -580,17 +585,6 @@ async def game_websocket(
                 game_id,
                 response,
             )
-
-            if (
-                response.game_event == GameEvent.SCORE_BANKED
-                and response.event_data.get("game_over")
-            ):
-                games_manager.remove_game(game_id)
-                await connection_manager.close_game(
-                    game_id,
-                    "Game finished.",
-                )
-                return
 
     except WebSocketDisconnect:
         connection_manager.disconnect(

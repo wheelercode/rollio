@@ -35,6 +35,11 @@ const ROLLIO_SLOT_DELAY = 300;
 const ROLLIO_STAMP_DELAY = 150;
 const ROLLIO_DISPLAY_DURATION = 3000;
 
+const WIN_STAMP_DELAY = 700;
+const PLAY_AGAIN_DELAY = 3200;
+
+const BANK_TRAY_CLEAR_DELAY = 1000;
+
 function render() {
   ui.render(getState());
 }
@@ -53,6 +58,19 @@ function getReturnedRolledDice(eventData, gameState) {
 
 function setMessage(message) {
   dispatch(STATE_ACTION.MESSAGE_SET, { message });
+}
+
+function getCurrentPlayerName(gameState) {
+  const currentPlayer = getPlayerById(
+    gameState,
+    gameState?.current_player_id,
+  );
+
+  return currentPlayer?.name ?? "Player 1";
+}
+
+function toPlayerMessage(playerName, message) {
+  return `${playerName}, ${message.charAt(0).toLowerCase()}${message.slice(1)}`;
 }
 
 async function handleGameWaiting(eventData, apiResponse) {
@@ -138,7 +156,12 @@ function applySelectionState(selectedIndexes) {
         .join(" • "),
     );
   } else {
-    setMessage("Every selected die must be part of a scoring group.");
+    setMessage(
+      toPlayerMessage(
+        getCurrentPlayerName(getState().game),
+        "Every selected die must be part of a scoring group.",
+      ),
+    );
   }
 }
 
@@ -250,7 +273,12 @@ async function handleDiceRolled(eventData, apiResponse) {
     return;
   }
 
-  setMessage("Select scoring dice, then Roll again or Bank.");
+  setMessage(
+    toPlayerMessage(
+      getCurrentPlayerName(apiResponse.game_state),
+      "Select scoring dice, then Roll again or Bank.",
+    ),
+  );
 }
 
 async function handleScoreBanked(eventData, apiResponse) {
@@ -304,6 +332,23 @@ async function handleScoreBanked(eventData, apiResponse) {
       `${previousName} banked ` +
         `${eventData.banked_score} points and won the game!`,
     );
+
+    dispatch(STATE_ACTION.GAME_WON, {
+      winnerName: previousPlayer?.name ?? "A player",
+    });
+
+    render();
+
+    await delay(WIN_STAMP_DELAY);
+
+    dispatch(STATE_ACTION.WIN_CELEBRATION_SHOWN);
+    render();
+    ui.launchConfetti();
+
+    await delay(PLAY_AGAIN_DELAY);
+
+    dispatch(STATE_ACTION.PLAY_AGAIN_SHOWN);
+    render();
     return;
   }
 
@@ -312,10 +357,41 @@ async function handleScoreBanked(eventData, apiResponse) {
       `${eventData.banked_score} points. ` +
       `It is now ${currentName}'s turn.`,
   );
+
+  // Fire-and-forget: awaiting here would stall the sequential
+  // websocket message queue, delaying the next player's roll.
+  delay(BANK_TRAY_CLEAR_DELAY).then(() => {
+    if (getTurnState() === "READY_TO_ROLL") {
+      dispatch(STATE_ACTION.TRAY_VALUES_CLEARED);
+      render();
+    }
+  });
 }
 
-function handleError(_eventData, apiResponse) {
-  throw new Error(apiResponse.message || "The server rejected the request.");
+async function handleError(_eventData, apiResponse) {
+  if (rollAnimationPromise) {
+    await rollAnimationPromise;
+    rollAnimationPromise = null;
+  }
+
+  if (bankAnimationPromise) {
+    await bankAnimationPromise;
+    bankAnimationPromise = null;
+  }
+
+  predictedBank = null;
+
+  const rawMessage =
+    apiResponse.message || "The server rejected the request.";
+
+  const message = apiResponse.game_state?.current_player_id
+    ? toPlayerMessage(
+        getCurrentPlayerName(apiResponse.game_state),
+        rawMessage,
+      )
+    : rawMessage;
+
+  dispatch(STATE_ACTION.REQUEST_FAILED, { message });
 }
 
 const API_PROTOCOL_VERSION = 1;
@@ -463,7 +539,10 @@ export async function roll() {
 
   if (openIndexes.length === 0) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
-      message: "No dice are available to roll.",
+      message: toPlayerMessage(
+        getCurrentPlayerName(state.game),
+        "No dice are available to roll.",
+      ),
     });
 
     render();
@@ -538,6 +617,19 @@ export async function bank() {
   const toPlayerScore =
     fromPlayerScore + bankedScore;
 
+  if (fromPlayerScore < 1000 && bankedScore < 1000) {
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: toPlayerMessage(
+        currentPlayer?.name ?? "Player 1",
+        "You need a turn score of 1,000 or more before " +
+          "you can bank for the first time.",
+      ),
+    });
+
+    render();
+    return;
+  }
+
   predictedBank = {
     bankedScore,
     fromPlayerScore,
@@ -564,6 +656,35 @@ export async function bank() {
 
     predictedBank = null;
 
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: error.message,
+    });
+
+    render();
+  }
+}
+
+export async function playAgain() {
+  const state = getState();
+
+  if (!state.ui.playAgainVisible) {
+    return;
+  }
+
+  const gameId = state.game?.game_id;
+
+  if (!gameId || !localPlayerId) {
+    dispatch(STATE_ACTION.REQUEST_FAILED, {
+      message: "No active game was found.",
+    });
+
+    render();
+    return;
+  }
+
+  try {
+    sendCommand(localPlayerId, "PLAY_AGAIN", {});
+  } catch (error) {
     dispatch(STATE_ACTION.REQUEST_FAILED, {
       message: error.message,
     });
@@ -615,7 +736,12 @@ export function toggleDieSelection(index) {
         .join(" • "),
     );
   } else {
-    setMessage("Every selected die must be part of a scoring group.");
+    setMessage(
+      toPlayerMessage(
+        getCurrentPlayerName(state.game),
+        "Every selected die must be part of a scoring group.",
+      ),
+    );
   }
 
   render();
@@ -656,6 +782,7 @@ export async function initialize() {
     onRoll: roll,
     onBank: bank,
     onDieSelected: toggleDieSelection,
+    onPlayAgain: playAgain,
   });
 
   initializeApi(handleApiResponse);

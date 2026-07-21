@@ -41,6 +41,7 @@ body {
 
 body {
   min-height: 100vh;
+  min-height: 100svh;
   overflow-x: hidden;
 
   color: var(--text-primary);
@@ -95,4 +96,5 @@ summary:focus-visible {
 .screen {
   width: 100%;
   min-height: 100vh;
+  min-height: 100svh;
 }

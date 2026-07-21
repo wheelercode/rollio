@@ -16,12 +16,12 @@
   --die-slot-rollio-background: rgba(220, 38, 38, 0.14);
   --die-slot-settled-background: rgba(0, 0, 0, 0.08);
 
-  --die-slot-border-width: 6px;
+  --die-slot-border-width: clamp(2px, 0.7vw, 4px);
   --die-slot-border-radius: 10%;
-  --die-slot-gap: 16px;
+  --die-slot-gap: clamp(6px, 1.8vw, 16px);
 
   --die-held-opacity: 0.5;
-  --die-slot-hover-scale: 1.2;
+  --die-slot-hover-scale: 1.1;
 }
 
 .dice-tray {
@@ -29,6 +29,12 @@
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: var(--die-slot-gap);
+}
+
+@media (max-width: 600px) {
+  .dice-tray {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .die-slot {
@@ -116,18 +122,6 @@ button.die-slot:disabled {
   display: block;
   width: 100%;
   height: 100%;
-}
-
-@media (max-width: 800px) {
-  .dice-tray {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 480px) {
-  .dice-tray {
-    gap: 10px;
-  }
 }
 
 .dice-stamp {
@@ -225,41 +219,83 @@ button.die-slot:disabled {
 
 
 /* Fixed player slots: the active-turn highlight moves between cards. */
-.player-score-card--current {
-  border-color: var(--panel-border);
-  background: var(--panel);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
-  transform: none;
-}
-
-.player-score-card--current .player-score-card__label {
-  color: var(--text-muted);
-}
-
-.player-score-card--current .player-score-card__name {
-  color: var(--text-primary);
-}
-
-.player-score-card--active {
-  border-color: rgba(255, 224, 122, 0.9);
-  background:
-    radial-gradient(
-      circle at 20% 0%,
-      rgba(255, 224, 122, 0.18),
-      transparent 58%
-    ),
-    var(--panel);
-  box-shadow:
-    0 16px 38px rgba(0, 0, 0, 0.28),
-    0 0 0 2px rgba(255, 224, 122, 0.16),
-    0 0 28px rgba(255, 224, 122, 0.18);
-  transform: translateY(-3px);
-}
-
-.player-score-card--active .player-score-card__label {
-  color: #ffe07a;
-}
-
 .player-score-card--active .player-score-card__name {
   color: #fff6d2;
+}
+
+.confetti-layer {
+  position: fixed;
+  z-index: 999;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -14px;
+  width: 9px;
+  height: 15px;
+  opacity: 0.9;
+  border-radius: 2px;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 1;
+  }
+
+  100% {
+    transform:
+      translate(var(--confetti-drift, 0), 105vh)
+      rotate(var(--confetti-rotation, 360deg));
+    opacity: 0.85;
+  }
+}
+
+.win-stamp {
+  position: fixed;
+  z-index: 1001;
+  top: 50%;
+  left: 50%;
+  max-width: min(92vw, 640px);
+  padding: 0.3em 0.6em;
+  transform: translate(-50%, -50%) rotate(-6deg) scale(0.6);
+  opacity: 0;
+  border: 0.12em solid currentColor;
+  border-radius: 0.15em;
+  background: rgba(8, 12, 20, 0.9);
+  color: #ffd77b;
+  text-align: center;
+  font-size: clamp(1.6rem, 6vw, 3.4rem);
+  font-weight: 1000;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+  filter: drop-shadow(0 0.1em 0 rgba(0, 0, 0, 0.32));
+  transition:
+    transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1),
+    opacity 420ms ease;
+}
+
+.win-stamp--visible {
+  transform: translate(-50%, -50%) rotate(-6deg) scale(1);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    display: none;
+  }
+
+  .win-stamp {
+    transition: none;
+  }
 }
