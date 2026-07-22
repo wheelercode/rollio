@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
@@ -10,9 +11,14 @@ from computer_player import ComputerPlayer
 
 
 AI_WATCH_INTERVAL_SECONDS = 0.10
-AI_BEFORE_ACTION_SECONDS = 0.65
-AI_AFTER_SELECTION_SECONDS = 0.55
-AI_BETWEEN_ROLLS_SECONDS = 0.80
+
+# Human-like pacing ranges.
+AI_TURN_START_DELAY = (0.55, 0.90)
+AI_THINKING_DELAY = (0.45, 0.85)
+AI_FIRST_SELECTION_DELAY = (0.20, 0.35)
+AI_BETWEEN_SELECTIONS_DELAY = (0.35, 0.55)
+AI_AFTER_SELECTION_DELAY = (0.50, 0.75)
+AI_BETWEEN_ROLLS_DELAY = (0.55, 0.90)
 
 app = base_server.app
 
@@ -23,16 +29,20 @@ computer_player = ComputerPlayer.from_solution_file(
 _ai_turn_tasks: dict[str, asyncio.Task] = {}
 
 
+async def random_delay(
+    delay_range: tuple[float, float],
+) -> None:
+    await asyncio.sleep(
+        random.uniform(*delay_range)
+    )
+
+
 def strict_player_can_control_game(
     game,
     player_id: str,
 ) -> bool:
     """
-    A client may control only its own currently active player.
-
-    The original AI-mode shortcut allowed the human player's ID to
-    issue commands during the computer's turn. Replacing the global
-    function here closes that gap without changing server.py.
+    A client may control only its own active human player.
     """
 
     return bool(
@@ -45,6 +55,36 @@ def strict_player_can_control_game(
 base_server.player_can_control_game = (
     strict_player_can_control_game
 )
+
+
+def tray_indexes_for_selection(
+    held_indexes: set[int],
+    rolled_indexes: tuple[int, ...],
+) -> tuple[int, ...]:
+    """
+    Convert indexes relative to the latest rolled-dice array into
+    absolute indexes in the browser's permanent six-slot tray.
+    """
+
+    open_indexes = [
+        index
+        for index in range(6)
+        if index not in held_indexes
+    ]
+
+    if any(
+        index < 0 or index >= len(open_indexes)
+        for index in rolled_indexes
+    ):
+        raise RuntimeError(
+            "Computer selection index does not fit the "
+            "currently open tray slots."
+        )
+
+    return tuple(
+        open_indexes[index]
+        for index in rolled_indexes
+    )
 
 
 async def broadcast_selection(
@@ -63,6 +103,40 @@ async def broadcast_selection(
             },
         ),
     )
+
+
+async def broadcast_selection_organically(
+    game,
+    selected_indexes: tuple[int, ...],
+) -> None:
+    """
+    Select dice one at a time.
+
+    DICE_SELECTION_CHANGED carries the complete current selection,
+    so each event sends a progressively larger list.
+    """
+
+    if not selected_indexes:
+        return
+
+    await random_delay(
+        AI_FIRST_SELECTION_DELAY
+    )
+
+    current_selection: list[int] = []
+
+    for index in selected_indexes:
+        current_selection.append(index)
+
+        await broadcast_selection(
+            game,
+            tuple(current_selection),
+        )
+
+        if len(current_selection) < len(selected_indexes):
+            await random_delay(
+                AI_BETWEEN_SELECTIONS_DELAY
+            )
 
 
 async def broadcast_roll_started(
@@ -151,8 +225,8 @@ async def play_computer_turn(
     """
     Play until the computer banks, gets a Rollio, or wins.
 
-    Every action is broadcast using the same event vocabulary used
-    by human commands, with short delays for client animation.
+    The computer pauses before each decision, selects dice one at
+    a time, then pauses before rolling or banking.
     """
 
     game = base_server.games_manager.get_game(game_id)
@@ -160,20 +234,37 @@ async def play_computer_turn(
     if game is None:
         return
 
+    held_indexes: set[int] = set()
+
     try:
-        await asyncio.sleep(AI_BEFORE_ACTION_SECONDS)
+        await random_delay(
+            AI_TURN_START_DELAY
+        )
 
         while computer_player.is_computer_turn(game):
             base_server.games_manager.touch(game_id)
+
+            await random_delay(
+                AI_THINKING_DELAY
+            )
+
             decision = computer_player.decide(game)
 
-            if decision.selected_indexes:
-                await broadcast_selection(
-                    game,
+            tray_selected_indexes = (
+                tray_indexes_for_selection(
+                    held_indexes,
                     decision.selected_indexes,
                 )
-                await asyncio.sleep(
-                    AI_AFTER_SELECTION_SECONDS
+            )
+
+            await broadcast_selection_organically(
+                game,
+                tray_selected_indexes,
+            )
+
+            if tray_selected_indexes:
+                await random_delay(
+                    AI_AFTER_SELECTION_DELAY
                 )
 
             if decision.action == "BANK":
@@ -192,14 +283,22 @@ async def play_computer_turn(
             await perform_roll(
                 game,
                 decision.selected_dice,
-                decision.selected_indexes,
+                tray_selected_indexes,
             )
 
             if not computer_player.is_computer_turn(game):
                 return
 
-            await asyncio.sleep(
-                AI_BETWEEN_ROLLS_SECONDS
+            held_indexes.update(
+                tray_selected_indexes
+            )
+
+            # Hot dice reset the browser tray to six open slots.
+            if len(held_indexes) == 6:
+                held_indexes.clear()
+
+            await random_delay(
+                AI_BETWEEN_ROLLS_DELAY
             )
 
     except asyncio.CancelledError:
@@ -219,14 +318,6 @@ def _finish_ai_task(
 
 
 async def watch_for_computer_turns() -> None:
-    """
-    Detect AI turns after any human WebSocket command.
-
-    Polling keeps the existing server.py command flow unchanged and
-    also catches AI turns produced by restart or future server-side
-    actions.
-    """
-
     while True:
         for game_id, managed in (
             base_server.games_manager.iter_managed_games()
@@ -247,7 +338,9 @@ async def watch_for_computer_turns() -> None:
             task = asyncio.create_task(
                 play_computer_turn(game_id)
             )
+
             _ai_turn_tasks[game_id] = task
+
             task.add_done_callback(
                 lambda completed, current_game_id=game_id: (
                     _finish_ai_task(
@@ -280,13 +373,17 @@ async def ai_enabled_lifespan(application):
             with suppress(asyncio.CancelledError):
                 await watcher_task
 
-            tasks = list(_ai_turn_tasks.values())
+            tasks = list(
+                _ai_turn_tasks.values()
+            )
 
             for task in tasks:
                 task.cancel()
 
             for task in tasks:
-                with suppress(asyncio.CancelledError):
+                with suppress(
+                    asyncio.CancelledError
+                ):
                     await task
 
             _ai_turn_tasks.clear()

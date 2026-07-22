@@ -6,7 +6,6 @@ base SHA: aff4376e45da81c7c07b1b5f62dfb9bd2a6c1708
 Replace:
 - game.py
 - solver.py
-- scripts/solver-debug.js
 
 Then remove the old incompatible solver data and recompute:
 

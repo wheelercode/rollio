@@ -171,6 +171,7 @@ function handleDiceSelectionChanged(eventData) {
     : [];
 
   applySelectionState(selectedIndexes);
+  render();
 }
 
 function handleRollStarted(eventData) {

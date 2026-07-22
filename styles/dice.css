@@ -218,7 +218,14 @@ button.die-slot:disabled {
 }
 
 
-/* Fixed player slots: the active-turn highlight moves between cards. */
+.player-score-card--active {
+  outline: 3px solid #ffd400;
+  outline-offset: 3px;
+  box-shadow:
+    0 0 10px rgba(255, 212, 0, 0.55),
+    0 0 22px rgba(255, 212, 0, 0.22);
+}
+
 .player-score-card--active .player-score-card__name {
   color: #fff6d2;
 }
