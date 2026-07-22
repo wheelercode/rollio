@@ -200,6 +200,26 @@ class Game:
         held_dice = sorted(scoring_dice)
         selected_score = scoring_result["score"]
 
+        maximum_turn_score = (
+            self.target_score
+            - self.current_player.score
+        )
+
+        new_turn_score = (
+            self.turn.base_score
+            + selected_score
+        )
+
+        if new_turn_score > maximum_turn_score:
+            return {
+                "success": False,
+                "error": (
+                    f"This selection would raise your turn score to "
+                    f"{new_turn_score:,}, but you only need "
+                    f"{maximum_turn_score:,} to reach exactly "
+                    f"{self.target_score:,}."
+                ),
+            }
         self.turn.base_score += selected_score
         self.turn.scored_dice.extend(held_dice)
 
@@ -257,6 +277,14 @@ class Game:
             }
 
         final_score = previous_player.score + banked_score
+        if final_score > self.target_score:
+            return {
+                "success": False,
+                "error": (
+                    f"You must finish on exactly {self.target_score:,}. "
+                    f"Banking would put you at {final_score:,}."
+                ),
+            }
         game_won = final_score == self.target_score
 
         if (

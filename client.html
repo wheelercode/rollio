@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="./styles/game.css">
   <link rel="stylesheet" href="./styles/dice.css">
   <link rel="stylesheet" href="./styles/matchmaking.css">
+  <link rel="stylesheet" href="./styles/solver-debug.css">
 </head>
 <body>
   <section id="startSection" class="screen">
@@ -117,6 +118,13 @@
         </div>
 
         <p id="message" class="game-message">Press Roll to begin.</p>
+
+        <aside class="solver-debug" aria-live="polite">
+          <strong class="solver-debug__title">Optimal-play debug</strong>
+          <output id="optimalPlayOutput" class="solver-debug__output">
+            Loading optimal-play tables...
+          </output>
+        </aside>
 
         <div class="game-actions">
           <button id="rollButton" class="game-action game-action--primary" type="button">Roll</button>
