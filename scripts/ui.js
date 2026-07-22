@@ -48,6 +48,8 @@ let settledIndexes = new Set();
 let scoreAnimationSequence = 0;
 let localPlayerId = null;
 
+let animatedTurnScore = null;
+
 const diceFaceCache = (() => {
   const images = new Map();
   let preloadPromise = null;
@@ -287,14 +289,17 @@ function renderScoreboard(state) {
     rightPlayer?.player_id === currentPlayerId,
   );
 
-  const authoritativeTurnScore = turn.base_score ?? 0;
-  const selectedScore = state.ui.selectedScore ?? 0;
-  const submittedScore = state.ui.submittedScore ?? 0;
+  const authoritativeTurnScore =
+    state.game?.turn?.base_score ?? 0;
+
+  const submittedScore =
+    state.ui.submittedScore ?? 0;
+
+  const settledTurnScore =
+    authoritativeTurnScore + submittedScore;
 
   elements.turnScore.textContent =
-    authoritativeTurnScore +
-    selectedScore +
-    submittedScore;
+    animatedTurnScore ?? settledTurnScore;
 
 }
 
@@ -567,6 +572,8 @@ function animateTurnScore(fromScore, toScore, sequence) {
     const startTime = performance.now();
     const scoreDifference = toScore - fromScore;
 
+    animatedTurnScore = fromScore;
+
     function update(now) {
       if (sequence !== scoreAnimationSequence) {
         resolve();
@@ -574,24 +581,42 @@ function animateTurnScore(fromScore, toScore, sequence) {
       }
 
       const elapsed = now - startTime;
-      const progress = Math.min(elapsed / SCORE_COUNT_DURATION, 1);
-      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      const progress = Math.min(
+        elapsed / SCORE_COUNT_DURATION,
+        1,
+      );
 
-      elements.turnScore.textContent = Math.round(
+      const easedProgress =
+        1 - Math.pow(1 - progress, 3);
+
+      animatedTurnScore = Math.round(
         fromScore + scoreDifference * easedProgress,
       );
+
+      elements.turnScore.textContent =
+        animatedTurnScore;
 
       if (progress < 1) {
         requestAnimationFrame(update);
       } else {
+        animatedTurnScore = toScore;
+
         elements.turnScore.textContent = toScore;
-        elements.turnScore.classList.remove("turn-score--counting");
+
+        elements.turnScore.classList.remove(
+          "turn-score--counting",
+        );
+
         resolve();
       }
     }
 
-    elements.turnScore.classList.add("turn-score--counting");
+    elements.turnScore.classList.add(
+      "turn-score--counting",
+    );
+
     elements.turnScore.textContent = fromScore;
+
     requestAnimationFrame(update);
   });
 }
@@ -810,6 +835,12 @@ export function animateScoringFeedback({
 
   scoreAnimationSequence += 1;
   const sequence = scoreAnimationSequence;
+
+  // Selection changes logical state immediately, but the visible
+  // turn score remains at its previous value until the animation
+  // reaches the scoreboard.
+  animatedTurnScore = fromScore;
+  elements.turnScore.textContent = fromScore;
 
   if (difference > 0) {
     void animatePositiveScore({
