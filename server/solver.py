@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from functools import cache
 from itertools import combinations, combinations_with_replacement
 from math import factorial, inf
+from pathlib import Path
 from time import perf_counter
 from typing import Iterable
 import pickle
-from pathlib import Path
 
 from game import Game
 
@@ -23,15 +23,22 @@ DIE_FACES = tuple(range(1, DICE_COUNT + 1))
 
 SOLVER_TOLERANCE = 1e-10
 MAX_LAYER_ITERATIONS = 10_000
-MAX_DOOMED_ITERATIONS = 10_000
 
-SOLVER_FORMAT_VERSION = 2
-SOLVER_OBJECTIVE = "minimize_roll_and_bank_actions_selection_cost_zero"
+SOLVER_FORMAT_VERSION = 3
+SOLVER_OBJECTIVE = (
+    "minimize_roll_and_bank_actions_selection_cost_zero_"
+    "over_target_is_rollio"
+)
 
-SOLVER_DATA_DIRECTORY = Path(__file__).resolve().parent / "solver_data"
-SOLVER_LAYER_DIRECTORY = SOLVER_DATA_DIRECTORY / "layers"
-
-FINAL_SOLUTION_PATH = SOLVER_DATA_DIRECTORY / "solution.pkl"
+SOLVER_DATA_DIRECTORY = (
+    Path(__file__).resolve().parent / "solver_data"
+)
+SOLVER_LAYER_DIRECTORY = (
+    SOLVER_DATA_DIRECTORY / "layers"
+)
+FINAL_SOLUTION_PATH = (
+    SOLVER_DATA_DIRECTORY / "solution.pkl"
+)
 
 RULES = Game()
 
@@ -52,15 +59,7 @@ class Selection:
 
 @dataclass(frozen=True)
 class RollPattern:
-    """
-    One unordered dice result.
-
-    A pattern is either:
-
-    - a Rollio;
-    - mandatory six-dice hot dice;
-    - a normal scoring roll with one or more selections.
-    """
+    """One unordered dice result."""
 
     dice: tuple[int, ...]
     probability: float
@@ -72,20 +71,23 @@ class RollPattern:
 @dataclass
 class SolvedGame:
     """
-    Compact solution tables.
+    Compact optimal-play tables.
 
     values_by_remaining[r][turn][dice] is the expected number
-    of player actions remaining when:
+    of Roll/Bank actions remaining when:
 
-    - r score units remain to reach 10,000;
-    - turn score is `turn` units;
-    - `dice` dice are available to roll.
+    - r score units remain to reach the target;
+    - turn is the current turn score in units;
+    - dice dice are available to roll.
 
-    Turn scores greater than the remaining target are collapsed
-    to the single doomed value `r + 1`.
+    Only legal turn scores from zero through r are stored.
+    Any roll for which every scoring selection would exceed r
+    is an immediate Rollio.
     """
 
-    values_by_remaining: list[list[list[float]] | None]
+    values_by_remaining: list[
+        list[list[float]] | None
+    ]
     start_values: list[float]
 
     def roll_value(
@@ -97,8 +99,7 @@ class SolvedGame:
         remaining_units = score_to_units(
             TARGET_SCORE - total_score
         )
-
-        turn_units = normalize_turn_units(
+        turn_units = validate_turn_units(
             remaining_units,
             score_to_units(turn_score),
         )
@@ -132,6 +133,31 @@ def units_to_score(units: int) -> int:
     return units * SCORE_STEP
 
 
+def validate_turn_units(
+    remaining_units: int,
+    turn_units: int,
+) -> int:
+    """Validate and return a legal turn score."""
+
+    if not 1 <= remaining_units <= TARGET_UNITS:
+        raise ValueError(
+            f"remaining_units must be from 1 through "
+            f"{TARGET_UNITS}."
+        )
+
+    if turn_units < 0:
+        raise ValueError(
+            "turn_units cannot be negative."
+        )
+
+    if turn_units > remaining_units:
+        raise ValueError(
+            "turn_units cannot exceed the remaining target."
+        )
+
+    return turn_units
+
+
 def canonical_dice(
     dice: Iterable[int],
 ) -> tuple[int, ...]:
@@ -155,32 +181,6 @@ def canonical_dice(
     return result
 
 
-def normalize_turn_units(
-    remaining_units: int,
-    turn_units: int,
-) -> int:
-    """
-    Collapse every over-target turn to one doomed value.
-
-    If 20 units remain, every turn score above 20 becomes 21.
-    """
-
-    if not 1 <= remaining_units <= TARGET_UNITS:
-        raise ValueError(
-            "remaining_units must be from 1 through 200."
-        )
-
-    if turn_units < 0:
-        raise ValueError(
-            "turn_units cannot be negative."
-        )
-
-    return min(
-        turn_units,
-        remaining_units + 1,
-    )
-
-
 def remove_selected_dice(
     rolled_dice: tuple[int, ...],
     selected_dice: tuple[int, ...],
@@ -199,7 +199,7 @@ def remove_selected_dice(
 def maximum_roll_score(
     dice: tuple[int, ...],
 ) -> int:
-    """Cached wrapper around the authoritative game rule."""
+    """Cached wrapper around the authoritative rule."""
 
     if not dice:
         return 0
@@ -211,9 +211,7 @@ def maximum_roll_score(
 def complete_selection_score(
     dice: tuple[int, ...],
 ) -> int | None:
-    """
-    Return the maximum score that consumes every supplied die.
-    """
+    """Return the score when every supplied die is consumed."""
 
     result = RULES.score_selection(list(dice))
 
@@ -228,10 +226,11 @@ def legal_selections(
     rolled_dice: tuple[int, ...],
 ) -> tuple[Selection, ...]:
     """
-    Return every strategically distinct legal selection.
+    Return every strategically distinct scoring selection.
 
-    Selections that produce the same score, next dice count,
-    and exact-finish eligibility are equivalent for the solver.
+    Overshoot legality depends on the current score, so this
+    function returns all scoring selections. Callers filter them
+    against the remaining target.
     """
 
     rolled_dice = canonical_dice(rolled_dice)
@@ -261,39 +260,38 @@ def legal_selections(
                 selected,
             )
 
-            if remaining_dice:
-                next_dice = len(remaining_dice)
-            else:
-                next_dice = DICE_COUNT
+            next_dice = (
+                len(remaining_dice)
+                if remaining_dice
+                else DICE_COUNT
+            )
 
-            # To win exactly, the engine requires every remaining
-            # scoring die from the current roll to be used.
             exact_finish_allowed = (
                 maximum_roll_score(remaining_dice) == 0
             )
 
-            score_units = score_to_units(score)
+            selection = Selection(
+                dice=selected,
+                score_units=score_to_units(score),
+                next_dice=next_dice,
+                exact_finish_allowed=(
+                    exact_finish_allowed
+                ),
+            )
 
             key = (
-                score_units,
-                next_dice,
-                exact_finish_allowed,
+                selection.score_units,
+                selection.next_dice,
+                selection.exact_finish_allowed,
             )
 
             existing = selections.get(key)
 
             if (
                 existing is None
-                or selected < existing.dice
+                or selection.dice < existing.dice
             ):
-                selections[key] = Selection(
-                    dice=selected,
-                    score_units=score_units,
-                    next_dice=next_dice,
-                    exact_finish_allowed=(
-                        exact_finish_allowed
-                    ),
-                )
+                selections[key] = selection
 
     return tuple(
         sorted(
@@ -310,9 +308,7 @@ def legal_selections(
 def ordered_roll_count(
     dice: tuple[int, ...],
 ) -> int:
-    """
-    Count the ordered rolls represented by an unordered roll.
-    """
+    """Count ordered rolls represented by an unordered roll."""
 
     result = factorial(len(dice))
 
@@ -326,9 +322,7 @@ def ordered_roll_count(
 def roll_patterns(
     dice_count: int,
 ) -> tuple[RollPattern, ...]:
-    """
-    Generate all unordered outcomes for a dice count.
-    """
+    """Generate every unordered outcome for a dice count."""
 
     if not 1 <= dice_count <= DICE_COUNT:
         raise ValueError(
@@ -369,16 +363,16 @@ def roll_patterns(
         )
 
         if mandatory_hot_dice:
-            forced_selection = Selection(
-                dice=dice,
-                score_units=score_to_units(
-                    complete_score
+            selections = (
+                Selection(
+                    dice=dice,
+                    score_units=score_to_units(
+                        complete_score
+                    ),
+                    next_dice=DICE_COUNT,
+                    exact_finish_allowed=False,
                 ),
-                next_dice=DICE_COUNT,
-                exact_finish_allowed=False,
             )
-
-            selections = (forced_selection,)
         else:
             selections = legal_selections(dice)
 
@@ -392,9 +386,7 @@ def roll_patterns(
                 dice=dice,
                 probability=probability,
                 rollio=False,
-                mandatory_hot_dice=(
-                    mandatory_hot_dice
-                ),
+                mandatory_hot_dice=mandatory_hot_dice,
                 selections=selections,
             )
         )
@@ -423,7 +415,7 @@ def bank_action_value(
     """
     Return the value of Bank, or infinity if unavailable.
 
-    The returned value includes the Bank action itself.
+    The returned value includes the Bank action.
     """
 
     if turn_units <= 0:
@@ -442,14 +434,12 @@ def bank_action_value(
         if not exact_finish_allowed:
             return inf
 
-        # The Bank action ends the game.
         return 1.0
 
     next_remaining = (
         remaining_units - turn_units
     )
 
-    # One Bank action plus the value of the next turn.
     return 1.0 + start_values[next_remaining]
 
 
@@ -461,18 +451,22 @@ def selection_choice_value(
     opened: bool,
     table: list[list[float]],
     start_values: list[float],
+    reset_value: float,
 ) -> float:
     """
-    Return the value after applying one normal selection.
+    Return the value after applying a normal selection.
 
-    This does not include the selection action itself.
+    An over-target selection immediately produces a Rollio and
+    therefore has reset_value.
     """
 
-    next_turn_units = normalize_turn_units(
-        remaining_units,
+    next_turn_units = (
         current_turn_units
-        + selection.score_units,
+        + selection.score_units
     )
+
+    if next_turn_units > remaining_units:
+        return reset_value
 
     roll_value = table[
         next_turn_units
@@ -502,29 +496,40 @@ def scoring_pattern_value(
     opened: bool,
     table: list[list[float]],
     start_values: list[float],
+    reset_value: float,
 ) -> float:
     """
-    Return the value after a scoring roll has appeared.
+    Return the value after a scoring roll appears.
 
-    The Roll action has already been counted by the caller.
+    If every available scoring selection overshoots, the roll is
+    an automatic Rollio and returns reset_value.
     """
 
     if pattern.mandatory_hot_dice:
         selection = pattern.selections[0]
-
-        next_turn_units = normalize_turn_units(
-            remaining_units,
+        next_turn_units = (
             current_turn_units
-            + selection.score_units,
+            + selection.score_units
         )
 
-        # Mandatory hot dice are selected automatically.
-        # Bank is unavailable; Roll is forced.
-        return table[next_turn_units][DICE_COUNT]
+        if next_turn_units > remaining_units:
+            return reset_value
+
+        return table[
+            next_turn_units
+        ][DICE_COUNT]
 
     best_choice = inf
 
     for selection in pattern.selections:
+        next_turn_units = (
+            current_turn_units
+            + selection.score_units
+        )
+
+        if next_turn_units > remaining_units:
+            continue
+
         choice_value = selection_choice_value(
             selection=selection,
             remaining_units=remaining_units,
@@ -532,12 +537,15 @@ def scoring_pattern_value(
             opened=opened,
             table=table,
             start_values=start_values,
+            reset_value=reset_value,
         )
 
         if choice_value < best_choice:
             best_choice = choice_value
 
-    # A normal dice selection costs one player action.
+    if best_choice == inf:
+        return reset_value
+
     return best_choice
 
 
@@ -570,6 +578,7 @@ def evaluate_roll_state(
                 opened=opened,
                 table=table,
                 start_values=start_values,
+                reset_value=reset_value,
             )
 
         expected_successor_value += (
@@ -580,59 +589,6 @@ def evaluate_roll_state(
     return 1.0 + expected_successor_value
 
 
-def solve_doomed_row(
-    *,
-    remaining_units: int,
-    opened: bool,
-    table: list[list[float]],
-    start_values: list[float],
-    reset_value: float,
-    tolerance: float,
-) -> None:
-    """
-    Solve the six roll states for an already-doomed turn.
-
-    Any additional score stays in the same canonical doomed
-    turn-score row, while a Rollio resets to turn score zero.
-    """
-
-    doomed_turn = remaining_units + 1
-    row = table[doomed_turn]
-
-    for _ in range(MAX_DOOMED_ITERATIONS):
-        largest_change = 0.0
-
-        for dice_available in range(
-            1,
-            DICE_COUNT + 1,
-        ):
-            previous = row[dice_available]
-
-            updated = evaluate_roll_state(
-                remaining_units=remaining_units,
-                turn_units=doomed_turn,
-                dice_available=dice_available,
-                opened=opened,
-                table=table,
-                start_values=start_values,
-                reset_value=reset_value,
-            )
-
-            row[dice_available] = updated
-
-            largest_change = max(
-                largest_change,
-                abs(updated - previous),
-            )
-
-        if largest_change < tolerance:
-            return
-
-    raise RuntimeError(
-        "The doomed-turn row did not converge."
-    )
-
-
 def recompute_layer(
     *,
     remaining_units: int,
@@ -640,23 +596,13 @@ def recompute_layer(
     table: list[list[float]],
     start_values: list[float],
     reset_value: float,
-    tolerance: float,
 ) -> float:
     """
-    Recompute one score layer for a proposed reset-state value.
+    Recompute one score layer for a proposed reset value.
 
     Turn scores are processed downward because scoring can only
     increase the current turn score.
     """
-
-    solve_doomed_row(
-        remaining_units=remaining_units,
-        opened=opened,
-        table=table,
-        start_values=start_values,
-        reset_value=reset_value,
-        tolerance=tolerance,
-    )
 
     for turn_units in range(
         remaining_units,
@@ -688,20 +634,13 @@ def solve_score_layer(
     start_values: list[float],
     tolerance: float = SOLVER_TOLERANCE,
 ) -> list[list[float]]:
-    """
-    Solve every roll state for one banked-score layer.
-
-    `remaining_units` is solved only after every smaller remaining
-    score has already been solved.
-    """
+    """Solve every roll state for one remaining-score layer."""
 
     opened = remaining_units < TARGET_UNITS
 
-    # Valid turn rows:
-    # 0 through remaining, plus remaining + 1 for doomed turns.
     table = [
         [0.0] * (DICE_COUNT + 1)
-        for _ in range(remaining_units + 2)
+        for _ in range(remaining_units + 1)
     ]
 
     reset_value = 0.0
@@ -713,24 +652,18 @@ def solve_score_layer(
             table=table,
             start_values=start_values,
             reset_value=reset_value,
-            tolerance=tolerance,
         )
 
         if (
             abs(new_reset_value - reset_value)
             < tolerance
         ):
-            reset_value = new_reset_value
-
-            # One final pass aligns every table entry with the
-            # converged reset value.
             recompute_layer(
                 remaining_units=remaining_units,
                 opened=opened,
                 table=table,
                 start_values=start_values,
-                reset_value=reset_value,
-                tolerance=tolerance,
+                reset_value=new_reset_value,
             )
 
             return table
@@ -743,291 +676,8 @@ def solve_score_layer(
     )
 
 
-def layer_path(remaining_units: int) -> Path:
-    """Return the persistence path for one score layer."""
-
-    return (
-        SOLVER_LAYER_DIRECTORY
-        / f"remaining_{remaining_units:03d}.pkl"
-    )
-
-
-def atomic_pickle_write(
-    path: Path,
-    value: object,
-) -> None:
-    """
-    Write a pickle atomically.
-
-    The completed temporary file replaces the destination only
-    after serialization succeeds.
-    """
-
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    temporary_path = path.with_suffix(
-        path.suffix + ".tmp"
-    )
-
-    with temporary_path.open("wb") as file:
-        pickle.dump(
-            value,
-            file,
-            protocol=pickle.HIGHEST_PROTOCOL,
-        )
-
-        file.flush()
-
-    temporary_path.replace(path)
-
-
-def read_pickle(path: Path) -> object:
-    """Read one pickle file."""
-
-    with path.open("rb") as file:
-        return pickle.load(file)
-
-
-def metadata_matches(
-    saved_metadata: object,
-) -> bool:
-    """Return whether saved data belongs to this solver."""
-
-    return saved_metadata == solver_metadata()
-
-
-def save_score_layer(
-    *,
-    remaining_units: int,
-    table: list[list[float]],
-    start_value: float,
-) -> None:
-    """Persist one completed score layer."""
-
-    payload = {
-        "metadata": solver_metadata(),
-        "remaining_units": remaining_units,
-        "start_value": start_value,
-        "table": table,
-    }
-
-    atomic_pickle_write(
-        layer_path(remaining_units),
-        payload,
-    )
-
-
-def load_score_layer(
-    remaining_units: int,
-) -> tuple[list[list[float]], float] | None:
-    """
-    Load one completed layer.
-
-    Invalid, incompatible, or damaged files are ignored.
-    """
-
-    path = layer_path(remaining_units)
-
-    if not path.exists():
-        return None
-
-    try:
-        payload = read_pickle(path)
-    except (
-        OSError,
-        EOFError,
-        pickle.UnpicklingError,
-        AttributeError,
-        ValueError,
-    ):
-        print(
-            f"Ignoring unreadable checkpoint: {path.name}"
-        )
-        return None
-
-    if not isinstance(payload, dict):
-        print(
-            f"Ignoring invalid checkpoint: {path.name}"
-        )
-        return None
-
-    if not metadata_matches(
-        payload.get("metadata")
-    ):
-        print(
-            f"Ignoring incompatible checkpoint: {path.name}"
-        )
-        return None
-
-    if (
-        payload.get("remaining_units")
-        != remaining_units
-    ):
-        print(
-            f"Ignoring mismatched checkpoint: {path.name}"
-        )
-        return None
-
-    table = payload.get("table")
-    start_value = payload.get("start_value")
-
-    if not isinstance(table, list):
-        print(
-            f"Ignoring invalid checkpoint table: {path.name}"
-        )
-        return None
-
-    if not isinstance(start_value, (int, float)):
-        print(
-            f"Ignoring invalid checkpoint value: {path.name}"
-        )
-        return None
-
-    return table, float(start_value)
-
-
-def save_final_solution(
-    solved: SolvedGame,
-) -> None:
-    """Persist the complete solved game."""
-
-    payload = {
-        "metadata": solver_metadata(),
-        "values_by_remaining": (
-            solved.values_by_remaining
-        ),
-        "start_values": solved.start_values,
-    }
-
-    atomic_pickle_write(
-        FINAL_SOLUTION_PATH,
-        payload,
-    )
-
-
-def load_final_solution() -> SolvedGame | None:
-    """
-    Load the complete solution when it is compatible.
-
-    Invalid or obsolete files are ignored.
-    """
-
-    if not FINAL_SOLUTION_PATH.exists():
-        return None
-
-    try:
-        payload = read_pickle(
-            FINAL_SOLUTION_PATH
-        )
-    except (
-        OSError,
-        EOFError,
-        pickle.UnpicklingError,
-        AttributeError,
-        ValueError,
-    ):
-        print(
-            "Ignoring unreadable final solution."
-        )
-        return None
-
-    if not isinstance(payload, dict):
-        print(
-            "Ignoring invalid final solution."
-        )
-        return None
-
-    if not metadata_matches(
-        payload.get("metadata")
-    ):
-        print(
-            "Ignoring incompatible final solution."
-        )
-        return None
-
-    values_by_remaining = payload.get(
-        "values_by_remaining"
-    )
-    start_values = payload.get(
-        "start_values"
-    )
-
-    if not isinstance(values_by_remaining, list):
-        return None
-
-    if not isinstance(start_values, list):
-        return None
-
-    if len(values_by_remaining) != TARGET_UNITS + 1:
-        return None
-
-    if len(start_values) != TARGET_UNITS + 1:
-        return None
-
-    return SolvedGame(
-        values_by_remaining=values_by_remaining,
-        start_values=start_values,
-    )
-
-
-def load_checkpointed_solution() -> tuple[
-    list[list[list[float]] | None],
-    list[float],
-    int,
-]:
-    """
-    Load the longest contiguous sequence of solved layers.
-
-    Layers must exist in order because each layer depends on all
-    smaller remaining-score layers.
-    """
-
-    values_by_remaining: list[
-        list[list[float]] | None
-    ] = [None] * (TARGET_UNITS + 1)
-
-    start_values = [0.0] * (TARGET_UNITS + 1)
-
-    completed_layers = 0
-
-    for remaining_units in range(
-        1,
-        TARGET_UNITS + 1,
-    ):
-        loaded = load_score_layer(
-            remaining_units
-        )
-
-        if loaded is None:
-            break
-
-        table, start_value = loaded
-
-        values_by_remaining[
-            remaining_units
-        ] = table
-
-        start_values[
-            remaining_units
-        ] = start_value
-
-        completed_layers = remaining_units
-
-    return (
-        values_by_remaining,
-        start_values,
-        completed_layers,
-    )
-
 def solver_metadata() -> dict[str, object]:
-    """
-    Return the identity of the mathematical problem being solved.
-
-    Saved data is accepted only when every field matches.
-    """
+    """Return the identity of the solved rule set."""
 
     return {
         "format_version": SOLVER_FORMAT_VERSION,
@@ -1038,6 +688,7 @@ def solver_metadata() -> dict[str, object]:
         "dice_count": DICE_COUNT,
         "mandatory_six_dice_hot_dice": True,
         "exact_target_required": True,
+        "over_target_selection_is_rollio": True,
         "selection_action_cost": 0,
         "roll_action_cost": 1,
         "bank_action_cost": 1,
@@ -1057,12 +708,7 @@ def atomic_pickle_write(
     path: Path,
     value: object,
 ) -> None:
-    """
-    Write a pickle atomically.
-
-    The completed temporary file replaces the destination only
-    after serialization succeeds.
-    """
+    """Write one pickle atomically."""
 
     path.parent.mkdir(
         parents=True,
@@ -1079,7 +725,6 @@ def atomic_pickle_write(
             file,
             protocol=pickle.HIGHEST_PROTOCOL,
         )
-
         file.flush()
 
     temporary_path.replace(path)
@@ -1108,27 +753,21 @@ def save_score_layer(
 ) -> None:
     """Persist one completed score layer."""
 
-    payload = {
-        "metadata": solver_metadata(),
-        "remaining_units": remaining_units,
-        "start_value": start_value,
-        "table": table,
-    }
-
     atomic_pickle_write(
         layer_path(remaining_units),
-        payload,
+        {
+            "metadata": solver_metadata(),
+            "remaining_units": remaining_units,
+            "start_value": start_value,
+            "table": table,
+        },
     )
 
 
 def load_score_layer(
     remaining_units: int,
 ) -> tuple[list[list[float]], float] | None:
-    """
-    Load one completed layer.
-
-    Invalid, incompatible, or damaged files are ignored.
-    """
+    """Load one compatible completed layer."""
 
     path = layer_path(remaining_units)
 
@@ -1144,47 +783,29 @@ def load_score_layer(
         AttributeError,
         ValueError,
     ):
-        print(
-            f"Ignoring unreadable checkpoint: {path.name}"
-        )
         return None
 
     if not isinstance(payload, dict):
-        print(
-            f"Ignoring invalid checkpoint: {path.name}"
-        )
         return None
 
     if not metadata_matches(
         payload.get("metadata")
     ):
-        print(
-            f"Ignoring incompatible checkpoint: {path.name}"
-        )
         return None
 
     if (
         payload.get("remaining_units")
         != remaining_units
     ):
-        print(
-            f"Ignoring mismatched checkpoint: {path.name}"
-        )
         return None
 
     table = payload.get("table")
     start_value = payload.get("start_value")
 
     if not isinstance(table, list):
-        print(
-            f"Ignoring invalid checkpoint table: {path.name}"
-        )
         return None
 
     if not isinstance(start_value, (int, float)):
-        print(
-            f"Ignoring invalid checkpoint value: {path.name}"
-        )
         return None
 
     return table, float(start_value)
@@ -1195,26 +816,20 @@ def save_final_solution(
 ) -> None:
     """Persist the complete solved game."""
 
-    payload = {
-        "metadata": solver_metadata(),
-        "values_by_remaining": (
-            solved.values_by_remaining
-        ),
-        "start_values": solved.start_values,
-    }
-
     atomic_pickle_write(
         FINAL_SOLUTION_PATH,
-        payload,
+        {
+            "metadata": solver_metadata(),
+            "values_by_remaining": (
+                solved.values_by_remaining
+            ),
+            "start_values": solved.start_values,
+        },
     )
 
 
 def load_final_solution() -> SolvedGame | None:
-    """
-    Load the complete solution when it is compatible.
-
-    Invalid or obsolete files are ignored.
-    """
+    """Load the complete compatible solution."""
 
     if not FINAL_SOLUTION_PATH.exists():
         return None
@@ -1230,23 +845,14 @@ def load_final_solution() -> SolvedGame | None:
         AttributeError,
         ValueError,
     ):
-        print(
-            "Ignoring unreadable final solution."
-        )
         return None
 
     if not isinstance(payload, dict):
-        print(
-            "Ignoring invalid final solution."
-        )
         return None
 
     if not metadata_matches(
         payload.get("metadata")
     ):
-        print(
-            "Ignoring incompatible final solution."
-        )
         return None
 
     values_by_remaining = payload.get(
@@ -1279,19 +885,13 @@ def load_checkpointed_solution() -> tuple[
     list[float],
     int,
 ]:
-    """
-    Load the longest contiguous sequence of solved layers.
-
-    Layers must exist in order because each layer depends on all
-    smaller remaining-score layers.
-    """
+    """Load the longest contiguous checkpoint sequence."""
 
     values_by_remaining: list[
         list[list[float]] | None
     ] = [None] * (TARGET_UNITS + 1)
 
     start_values = [0.0] * (TARGET_UNITS + 1)
-
     completed_layers = 0
 
     for remaining_units in range(
@@ -1323,18 +923,14 @@ def load_checkpointed_solution() -> tuple[
         completed_layers,
     )
 
+
 def solve_game(
     *,
     tolerance: float = SOLVER_TOLERANCE,
     progress_interval: int = 10,
     use_persistence: bool = True,
 ) -> SolvedGame:
-    """
-    Load, resume, or solve the complete Rollio value table.
-
-    Only Roll and Bank count as player actions. Dice selection
-    remains an optimized zero-cost decision.
-    """
+    """Load, resume, or solve the complete value table."""
 
     if use_persistence:
         completed_solution = (
@@ -1345,7 +941,6 @@ def solve_game(
             print(
                 "Loaded complete solver solution from disk."
             )
-
             return completed_solution
 
         (
@@ -1357,35 +952,21 @@ def solve_game(
         values_by_remaining = [
             None
         ] * (TARGET_UNITS + 1)
-
         start_values = [
             0.0
         ] * (TARGET_UNITS + 1)
-
         completed_layers = 0
 
     if completed_layers:
-        last_banked_score = (
-            TARGET_SCORE
-            - units_to_score(completed_layers)
-        )
-
         print(
             f"Loaded {completed_layers:,} "
             f"checkpointed layers."
         )
 
-        print(
-            f"Resuming after banked score "
-            f"{last_banked_score:,}."
-        )
-
     started_at = perf_counter()
 
-    first_unsolved_layer = completed_layers + 1
-
     for remaining_units in range(
-        first_unsolved_layer,
+        completed_layers + 1,
         TARGET_UNITS + 1,
     ):
         table = solve_score_layer(
@@ -1417,7 +998,6 @@ def solve_game(
             or remaining_units == TARGET_UNITS
         ):
             elapsed = perf_counter() - started_at
-
             total_score = (
                 TARGET_SCORE
                 - units_to_score(remaining_units)
@@ -1427,7 +1007,6 @@ def solve_game(
                 f"Solved banked score "
                 f"{total_score:>5,}; "
                 f"expected Roll/Bank actions "
-                f"from turn start "
                 f"{start_value:,.6f}; "
                 f"elapsed {elapsed:,.1f}s"
             )
@@ -1439,7 +1018,6 @@ def solve_game(
 
     if use_persistence:
         save_final_solution(solved)
-
         print(
             f"Saved complete solution to "
             f"{FINAL_SOLUTION_PATH}"
@@ -1455,15 +1033,13 @@ def best_selection(
     turn_score: int,
     rolled_dice: Iterable[int],
 ) -> Selection:
-    """
-    Return the optimal scoring selection for a concrete roll.
-    """
+    """Return the optimal non-overshooting selection."""
 
     dice = canonical_dice(rolled_dice)
     remaining_units = score_to_units(
         TARGET_SCORE - total_score
     )
-    current_turn_units = normalize_turn_units(
+    current_turn_units = validate_turn_units(
         remaining_units,
         score_to_units(turn_score),
     )
@@ -1477,33 +1053,38 @@ def best_selection(
             "The game is already terminal."
         )
 
-    patterns = {
-        pattern.dice: pattern
-        for pattern in roll_patterns(len(dice))
-    }
-
-    pattern = patterns[dice]
+    pattern = {
+        candidate.dice: candidate
+        for candidate in roll_patterns(len(dice))
+    }[dice]
 
     if pattern.rollio:
         raise ValueError(
             "A Rollio has no scoring selection."
         )
 
-    if pattern.mandatory_hot_dice:
-        return pattern.selections[0]
-
-    opened = total_score > 0
     best: Selection | None = None
     best_value = inf
+    reset_value = solved.start_values[
+        remaining_units
+    ]
 
     for selection in pattern.selections:
+        if (
+            current_turn_units
+            + selection.score_units
+            > remaining_units
+        ):
+            continue
+
         value = selection_choice_value(
             selection=selection,
             remaining_units=remaining_units,
             current_turn_units=current_turn_units,
-            opened=opened,
+            opened=total_score > 0,
             table=table,
             start_values=solved.start_values,
+            reset_value=reset_value,
         )
 
         if value < best_value:
@@ -1511,8 +1092,9 @@ def best_selection(
             best = selection
 
     if best is None:
-        raise RuntimeError(
-            "No legal selection was found."
+        raise ValueError(
+            "Every scoring selection exceeds the exact target; "
+            "the roll is an automatic Rollio."
         )
 
     return best
@@ -1527,17 +1109,12 @@ def best_roll_or_bank(
     exact_finish_allowed: bool = True,
     mandatory_hot_dice: bool = False,
 ) -> str:
-    """
-    Return "ROLL" or "BANK" for a post-selection state.
-
-    `exact_finish_allowed` matters only when banking would land
-    exactly on 10,000.
-    """
+    """Return ROLL or BANK for a post-selection state."""
 
     remaining_units = score_to_units(
         TARGET_SCORE - total_score
     )
-    turn_units = normalize_turn_units(
+    turn_units = validate_turn_units(
         remaining_units,
         score_to_units(turn_score),
     )
@@ -1594,8 +1171,8 @@ def print_roll_pattern_counts() -> None:
         print(
             f"{dice_count} dice: "
             f"{len(patterns):,} patterns, "
-            f"{rollios:,} Rollios, "
-            f"{mandatory:,} mandatory hot-dice patterns"
+            f"{rollios:,} natural Rollios, "
+            f"{mandatory:,} hot-dice patterns"
         )
 
     print(
@@ -1607,12 +1184,11 @@ def print_roll_pattern_counts() -> None:
 if __name__ == "__main__":
     print_roll_pattern_counts()
     print()
-
     print(
         "Objective: minimize Roll and Bank actions."
     )
     print(
-        "Dice selection is optimized at zero action cost."
+        "Over-target rolls are automatic Rollios."
     )
     print()
 
@@ -1622,7 +1198,6 @@ if __name__ == "__main__":
     )
 
     print()
-
     print(
         "Expected Roll/Bank actions from a new game: "
         f"{solution.start_values[TARGET_UNITS]:,.6f}"

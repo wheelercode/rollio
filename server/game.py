@@ -119,19 +119,21 @@ class Game:
         self.turn.roll_number += 1
         self.turn.state = "WAITING_FOR_SELECTION"
 
-        complete_roll_score = self.score_selection(
-            self.turn.rolled_dice
-        )
-        self.turn.mandatory_hot_dice = (
-            available_dice == 6
-            and complete_roll_score is not None
+        maximum_allowed_selection = (
+            self.target_score
+            - self.current_player.score
+            - self.turn.base_score
         )
 
-        roll_score = self.maximum_roll_score(
-            self.turn.rolled_dice
+        allowed_roll_score = self.maximum_roll_score_at_most(
+            self.turn.rolled_dice,
+            maximum_allowed_selection,
         )
 
-        if roll_score == 0:
+        # A roll with no legal scoring selection is a Rollio.
+        # This includes rolls that contain scoring dice but whose
+        # every scoring selection would exceed the exact target.
+        if allowed_roll_score == 0:
             rolled_dice = self.turn.rolled_dice.copy()
             lost_score = self.turn.base_score
             previous_player = self.current_player
@@ -148,6 +150,17 @@ class Game:
                     previous_player.player_id
                 ),
             }
+
+        complete_roll_score = self.score_selection(
+            self.turn.rolled_dice
+        )
+
+        self.turn.mandatory_hot_dice = (
+            available_dice == 6
+            and complete_roll_score is not None
+            and complete_roll_score["score"]
+            <= maximum_allowed_selection
+        )
 
         return {
             "success": True,
@@ -220,6 +233,7 @@ class Game:
                     f"{self.target_score:,}."
                 ),
             }
+
         self.turn.base_score += selected_score
         self.turn.scored_dice.extend(held_dice)
 
@@ -277,6 +291,7 @@ class Game:
             }
 
         final_score = previous_player.score + banked_score
+
         if final_score > self.target_score:
             return {
                 "success": False,
@@ -285,6 +300,7 @@ class Game:
                     f"Banking would put you at {final_score:,}."
                 ),
             }
+
         game_won = final_score == self.target_score
 
         if (
@@ -357,23 +373,18 @@ class Game:
             reverse=True,
         )
 
-        # Two sets of three
         if n_dice == 6 and frequency_pattern == [3, 3]:
             return 2500
 
-        # Four of a kind plus a pair
         if n_dice == 6 and frequency_pattern == [4, 2]:
             return 1500
 
-        # Three pairs
         if n_dice == 6 and frequency_pattern == [2, 2, 2]:
             return 1500
 
-        # Straight
         if dice == [1, 2, 3, 4, 5, 6]:
             return 1500
 
-        # Three, four, five, or six of a kind
         if (
             n_dice in (3, 4, 5, 6)
             and len(counts) == 1
@@ -389,7 +400,6 @@ class Game:
 
             return three_of_a_kind_score * multiplier
 
-        # Individual scoring dice
         if dice == [1]:
             return 100
 
@@ -422,9 +432,6 @@ class Game:
             best_result = None
             n_remaining = len(remaining_dice)
 
-            # Always include the first remaining die in the next
-            # group. This avoids evaluating the same partition in
-            # different group orders.
             for mask in range(1, 1 << n_remaining):
                 if not mask & 1:
                     continue
@@ -479,6 +486,24 @@ class Game:
         of a roll.
         """
 
+        return self.maximum_roll_score_at_most(
+            dice,
+            float("inf"),
+        )
+
+    def maximum_roll_score_at_most(
+        self,
+        dice,
+        maximum_score,
+    ):
+        """
+        Return the highest legal selection score that does not
+        exceed maximum_score.
+
+        Return 0 when no legal selection fits. The caller treats
+        that condition as an automatic Rollio.
+        """
+
         dice = list(dice)
         best_score = 0
 
@@ -491,7 +516,10 @@ class Game:
 
             result = self.score_selection(subset)
 
-            if result is not None:
+            if (
+                result is not None
+                and result["score"] <= maximum_score
+            ):
                 best_score = max(
                     best_score,
                     result["score"],

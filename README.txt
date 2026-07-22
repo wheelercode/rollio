@@ -1,22 +1,21 @@
-Rollio optimal-play debug UI
+Complete replacement files based on:
+wheelercode/rollio
+branch: optimal_play_ui
+base SHA: aff4376e45da81c7c07b1b5f62dfb9bd2a6c1708
 
-Files:
-- Replace client.html
-- Replace scripts/app.js
-- Add scripts/solver-debug.js
-- Add styles/solver-debug.css
-- Add export_solver_data.py
+Replace:
+- game.py
+- solver.py
+- scripts/solver-debug.js
 
-Then run:
+Then remove the old incompatible solver data and recompute:
+
+Remove-Item .\solver_data -Recurse -Force
+python solver.py
 python export_solver_data.py
 
-This creates:
-solver_data/solution.json
+The new solver format is version 3.
 
-Keep serving the project through Live Server as before. The debug panel reads the JSON tables directly in the browser and shows:
-- optimal scoring dice selection
-- optimal next decision: ROLL or BANK
-- resulting turn score
-- expected Roll/Bank actions remaining
-
-The JSON export is generated from the persistent solution.pkl and does not recompute the solver.
+Rule:
+A roll is a Rollio when it has no scoring selection that keeps the
+turn score at or below target_score - player_score.
