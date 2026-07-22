@@ -36,8 +36,9 @@ SOLVER_DATA_DIRECTORY = (
 SOLVER_LAYER_DIRECTORY = (
     SOLVER_DATA_DIRECTORY / "layers"
 )
+
 FINAL_SOLUTION_PATH = (
-    SOLVER_DATA_DIRECTORY / "solution.pkl"
+    Path(__file__).resolve().parent / "solution.pkl"
 )
 
 RULES = Game()

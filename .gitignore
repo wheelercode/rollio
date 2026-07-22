@@ -4,5 +4,4 @@ __pycache__/
 venv/
 .env
 .vscode/
-solver_data/layers/*
-!solver_data/solution.pkl
+solver_data/
