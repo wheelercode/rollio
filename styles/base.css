@@ -27,6 +27,14 @@
   --shadow-large:
     0 30px 80px rgba(0, 0, 0, 0.46),
     0 8px 24px rgba(0, 0, 0, 0.26);
+
+
+  --page-glow-teal: rgba(21, 100, 108, 0.28);
+  --page-glow-gold: rgba(151, 91, 12, 0.18);
+  --focus-ring: rgba(255, 215, 123, 0.45);
+  --color-transparent: transparent;
+  --shadow-deep: rgba(0, 0, 0, 0.46);
+  --shadow-soft: rgba(0, 0, 0, 0.26);
 }
 
 * {
@@ -58,13 +66,13 @@ body {
   background:
     radial-gradient(
       circle at 20% 20%,
-      rgba(21, 100, 108, 0.28),
-      transparent 32%
+      var(--page-glow-teal),
+      var(--color-transparent) 32%
     ),
     radial-gradient(
       circle at 80% 80%,
-      rgba(151, 91, 12, 0.18),
-      transparent 34%
+      var(--page-glow-gold),
+      var(--color-transparent) 34%
     ),
     linear-gradient(
       145deg,
@@ -85,7 +93,7 @@ button {
 button:focus-visible,
 input:focus-visible,
 summary:focus-visible {
-  outline: 3px solid rgba(255, 215, 123, 0.45);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 4px;
 }
 

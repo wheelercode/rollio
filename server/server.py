@@ -176,7 +176,7 @@ class ConnectionManager:
 
 games_manager = GamesManager()
 connection_manager = ConnectionManager()
-
+transport_message_handler = None
 
 async def cleanup_games() -> None:
     while True:
@@ -511,8 +511,24 @@ async def game_websocket(
         while True:
             raw_message = await websocket.receive_json()
 
-            if raw_message.get("transport") == "PONG":
-                games_manager.touch(game_id)
+            transport = raw_message.get("transport")
+
+            if isinstance(transport, str):
+                transport_data = raw_message.get("transport_data")
+
+                if not isinstance(transport_data, dict):
+                    transport_data = {}
+
+                if transport == "PONG":
+                    games_manager.touch(game_id)
+                elif transport_message_handler is not None:
+                    await transport_message_handler(
+                        game_id,
+                        websocket,
+                        transport,
+                        transport_data,
+                    )
+
                 continue
 
             try:

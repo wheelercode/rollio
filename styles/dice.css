@@ -22,6 +22,24 @@
 
   --die-held-opacity: 0.5;
   --die-slot-hover-scale: 1.1;
+
+
+  --die-slot-empty-highlight: rgba(255, 255, 255, 0.025);
+  --die-slot-empty-shadow: rgba(0, 0, 0, 0.06);
+  --dice-stamp-background: rgba(255, 255, 255, 0.88);
+  --dice-stamp-shadow: rgba(0, 0, 0, 0.24);
+  --rollio-stamp-color: #dc2626;
+  --hot-dice-stamp-color: #f59e0b;
+  --score-float-background: rgba(8, 12, 20, 0.88);
+  --score-float-single-color: #4ade80;
+  --score-float-kind-color: #fbbf24;
+  --score-float-straight-color: #22d3ee;
+  --score-float-combination-color: #c084fc;
+  --score-float-removed-color: #f87171;
+  --win-stamp-background: rgba(8, 12, 20, 0.9);
+  --win-stamp-color: #ffd77b;
+  --win-stamp-shadow: rgba(0, 0, 0, 0.32);
+  --color-transparent: transparent;
 }
 
 .dice-tray {
@@ -58,8 +76,8 @@
   background:
     linear-gradient(
       145deg,
-      rgba(255, 255, 255, 0.025),
-      rgba(0, 0, 0, 0.06)
+      var(--die-slot-empty-highlight),
+      var(--die-slot-empty-shadow)
     );
 }
 
@@ -133,7 +151,7 @@ button.die-slot:disabled {
   transform: translate(-50%, -50%) rotate(-45deg);
   border: 0.12em solid currentColor;
   border-radius: 0.12em;
-  background: rgba(255, 255, 255, 0.88);
+  background: var(--dice-stamp-background);
   font-size: clamp(2.5rem, 9vw, 7rem);
   font-weight: 1000;
   line-height: 0.95;
@@ -141,15 +159,15 @@ button.die-slot:disabled {
   white-space: nowrap;
   pointer-events: none;
   user-select: none;
-  filter: drop-shadow(0 0.08em 0 rgba(0, 0, 0, 0.24));
+  filter: drop-shadow(0 0.08em 0 var(--dice-stamp-shadow));
 }
 
 .dice-stamp--rollio {
-  color: #dc2626;
+  color: var(--rollio-stamp-color);
 }
 
 .dice-stamp--hot {
-  color: #f59e0b;
+  color: var(--hot-dice-stamp-color);
 }
 
 .score-effects {
@@ -170,7 +188,7 @@ button.die-slot:disabled {
   padding: 0.1em 0.34em;
   border: 0.075em solid currentColor;
   border-radius: 0.16em;
-  background: rgba(8, 12, 20, 0.88);
+  background: var(--score-float-background);
   font-size: clamp(2.25rem, 6vw, 4.75rem);
   font-weight: 800;
   line-height: 1;
@@ -188,23 +206,23 @@ button.die-slot:disabled {
 }
 
 .score-float--single {
-  color: #4ade80;
+  color: var(--score-float-single-color);
 }
 
 .score-float--kind {
-  color: #fbbf24;
+  color: var(--score-float-kind-color);
 }
 
 .score-float--straight {
-  color: #22d3ee;
+  color: var(--score-float-straight-color);
 }
 
 .score-float--combination {
-  color: #c084fc;
+  color: var(--score-float-combination-color);
 }
 
 .score-float--removed {
-  color: #f87171;
+  color: var(--score-float-removed-color);
 }
 
 .turn-score--counting {
@@ -215,19 +233,6 @@ button.die-slot:disabled {
   .score-float {
     display: none;
   }
-}
-
-
-.player-score-card--active {
-  outline: 3px solid #ffd400;
-  outline-offset: 3px;
-  box-shadow:
-    0 0 10px rgba(255, 212, 0, 0.55),
-    0 0 22px rgba(255, 212, 0, 0.22);
-}
-
-.player-score-card--active .player-score-card__name {
-  color: #fff6d2;
 }
 
 .confetti-layer {
@@ -276,8 +281,8 @@ button.die-slot:disabled {
   opacity: 0;
   border: 0.12em solid currentColor;
   border-radius: 0.15em;
-  background: rgba(8, 12, 20, 0.9);
-  color: #ffd77b;
+  background: var(--win-stamp-background);
+  color: var(--win-stamp-color);
   text-align: center;
   font-size: clamp(1.6rem, 6vw, 3.4rem);
   font-weight: 1000;
@@ -286,7 +291,7 @@ button.die-slot:disabled {
   white-space: normal;
   pointer-events: none;
   user-select: none;
-  filter: drop-shadow(0 0.1em 0 rgba(0, 0, 0, 0.32));
+  filter: drop-shadow(0 0.1em 0 var(--win-stamp-shadow));
   transition:
     transform 420ms cubic-bezier(0.2, 0.9, 0.25, 1),
     opacity 420ms ease;

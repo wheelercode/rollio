@@ -1,20 +1,32 @@
+:root {
+  --dialog-border: rgba(255, 255, 255, 0.16);
+  --dialog-background-start: rgba(15, 40, 51, 0.99);
+  --dialog-background-end: rgba(7, 22, 31, 0.99);
+  --dialog-shadow: rgba(0, 0, 0, 0.55);
+  --dialog-backdrop: rgba(2, 8, 12, 0.74);
+  --game-type-button-border: rgba(255, 255, 255, 0.13);
+  --game-type-button-background: rgba(255, 255, 255, 0.08);
+  --game-type-button-hover-border: rgba(255, 224, 122, 0.72);
+  --game-type-button-hover-background: rgba(244, 185, 66, 0.14);
+}
+
 .game-type-dialog {
   width: min(calc(100% - 32px), 460px);
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--dialog-border);
   border-radius: 22px;
   color: var(--text-primary);
   background:
     linear-gradient(
       145deg,
-      rgba(15, 40, 51, 0.99),
-      rgba(7, 22, 31, 0.99)
+      var(--dialog-background-start),
+      var(--dialog-background-end)
     );
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 28px 80px var(--dialog-shadow);
 }
 
 .game-type-dialog::backdrop {
-  background: rgba(2, 8, 12, 0.74);
+  background: var(--dialog-backdrop);
   backdrop-filter: blur(5px);
 }
 
@@ -38,11 +50,11 @@
 .game-type-button {
   min-height: 58px;
   padding: 0 22px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  border: 1px solid var(--game-type-button-border);
   border-radius: 14px;
   cursor: pointer;
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--game-type-button-background);
   font-size: 1rem;
   font-weight: 800;
   transition:
@@ -53,8 +65,8 @@
 
 .game-type-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  border-color: rgba(255, 224, 122, 0.72);
-  background: rgba(244, 185, 66, 0.14);
+  border-color: var(--game-type-button-hover-border);
+  background: var(--game-type-button-hover-background);
 }
 
 .game-type-button:disabled {
