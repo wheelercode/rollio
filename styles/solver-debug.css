@@ -1,0 +1,31 @@
+.solver-debug {
+  width: min(760px, calc(100% - 2rem));
+  margin: 0 auto 1.25rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed rgba(255, 255, 255, 0.35);
+  border-radius: 0.75rem;
+  background: rgba(0, 0, 0, 0.28);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.solver-debug__title {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.solver-debug__output {
+  display: block;
+  line-height: 1.45;
+}
+
+.solver-debug__output[data-tone="ready"] {
+  opacity: 1;
+}
+
+.solver-debug__output[data-tone="error"] {
+  font-weight: 700;
+}
