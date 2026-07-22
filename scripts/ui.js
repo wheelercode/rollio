@@ -10,7 +10,7 @@ const DIE_FACE_URLS = Object.freeze({
   6: "assets/die-6.svg",
 });
 
-const ROLL_ANIMATION_DURATION = 3000;
+const ROLL_ANIMATION_DURATION = 2000;
 const ROLL_DURATION_DELTA = 350;
 
 const START_FACE_INTERVAL = 45;
@@ -907,12 +907,61 @@ export async function animateBankTransfer({
   const sequence = scoreAnimationSequence;
 
   let remaining = Math.max(0, bankedScore);
-  let displayedTurnScore = remaining;
   let displayedPlayerScore = fromPlayerScore;
 
-  elements.turnScore.textContent = displayedTurnScore;
-  playerScoreElement.textContent = displayedPlayerScore;
+  /*
+   * Stage 1:
+   * Emphasize the complete amount being banked.
+   */
+  animatedTurnScore = bankedScore;
 
+  elements.turnScore.textContent = `+${bankedScore}`;
+  playerScoreElement.textContent = fromPlayerScore;
+
+  const growAnimation = elements.turnScore.animate(
+    [
+      {
+        transform: "scale(1)",
+      },
+      {
+        transform: "scale(1.35)",
+      },
+      {
+        transform: "scale(1.18)",
+      },
+    ],
+    {
+      duration: 320,
+      easing: "cubic-bezier(0.2, 0.9, 0.25, 1)",
+      fill: "forwards",
+    },
+  );
+
+  await growAnimation.finished.catch(() => {});
+
+  if (sequence !== scoreAnimationSequence) {
+    growAnimation.cancel();
+    return;
+  }
+
+  /*
+   * Briefly hold the emphasized +score before transferring it.
+   */
+  await delay(180);
+
+  if (sequence !== scoreAnimationSequence) {
+    growAnimation.cancel();
+    return;
+  }
+
+  growAnimation.cancel();
+  elements.turnScore.style.transform = "";
+
+  /*
+   * Stage 2:
+   * Drain points from the turn score while adding them to the
+   * player's permanent score.
+   */
   while (remaining > 0) {
     if (sequence !== scoreAnimationSequence) {
       return;
@@ -921,20 +970,30 @@ export async function animateBankTransfer({
     const step = getBankTransferStep(remaining);
 
     remaining -= step;
-    displayedTurnScore -= step;
     displayedPlayerScore += step;
 
-    elements.turnScore.textContent = displayedTurnScore;
-    playerScoreElement.textContent = displayedPlayerScore;
+    animatedTurnScore = remaining;
+
+    elements.turnScore.textContent =
+      remaining > 0 ? `+${remaining}` : "0";
+
+    playerScoreElement.textContent =
+      displayedPlayerScore;
 
     await delay(BANK_STEP_DELAYS[step]);
   }
 
+  /*
+   * Stage 3:
+   * Snap to the authoritative final display values.
+   */
   if (sequence !== scoreAnimationSequence) {
     return;
   }
 
-  elements.turnScore.textContent = 0;
+  animatedTurnScore = null;
+
+  elements.turnScore.textContent = "0";
   playerScoreElement.textContent = toPlayerScore;
 }
 

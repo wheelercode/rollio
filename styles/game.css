@@ -52,9 +52,13 @@
 .player-score-card {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
+  width: 100%;
   min-width: 0;
-  gap: 0.4em;
-  padding: clamp(6px, 1.6vw, 12px) clamp(12px, 2.5vw, 20px);
+  gap: 1em;
+  padding:
+    clamp(6px, 1.6vw, 12px)
+    clamp(12px, 2.5vw, 20px);
   border: 2px solid var(--player-card-border);
   border-radius: 16px;
   background:
@@ -84,9 +88,8 @@
   color: var(--player-card-active-name);
 }
 
-.player-score-card--opponent { justify-content: flex-end; }
-
 .player-score-card__name {
+  min-width: 0;
   overflow: hidden;
   font-size: clamp(0.8rem, 2vw, 1rem);
   font-weight: 700;
@@ -96,10 +99,13 @@
 }
 
 .player-score-card__score {
+  flex: 0 0 auto;
   color: var(--accent-light);
   font-size: clamp(0.95rem, 2.6vw, 1.3rem);
+  font-variant-numeric: tabular-nums;
   font-weight: 900;
   line-height: 1;
+  text-align: right;
   white-space: nowrap;
 }
 
